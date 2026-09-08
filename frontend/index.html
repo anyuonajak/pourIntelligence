@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pour Intelligence — go / no-go for concrete & masonry</title>
+    <meta
+      name="description"
+      content="Check whether a concrete or masonry pour is safe to proceed from the forecast and ACI 305R / 306R guidance."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <div class="page">
+      <header class="masthead">
+        <div class="brand">
+          <p class="eyebrow">Field advisory · ACI 305R / 306R</p>
+          <h1>Pour Intelligence</h1>
+          <p class="tagline">
+            Weather-physics go / no-go for a specific pour, on a specific date, at a specific site.
+          </p>
+        </div>
+        <p class="badge-note">Not a substitute for the engineer of record</p>
+      </header>
+
+      <main class="layout">
+        <section class="ticket" aria-labelledby="ticket-heading">
+          <div class="ticket-head">
+            <h2 id="ticket-heading">Pour ticket</h2>
+            <p>Jobsite local time. Defaults are a typical Type I slab.</p>
+          </div>
+
+          <div class="presets" role="group" aria-label="Example jobsites">
+            <button type="button" data-zip="94612" data-label="Oakland, CA">Oakland</button>
+            <button type="button" data-zip="85003" data-label="Phoenix, AZ">Phoenix</button>
+            <button type="button" data-zip="55401" data-label="Minneapolis, MN">Minneapolis</button>
+            <button type="button" data-zip="80202" data-label="Denver, CO">Denver</button>
+          </div>
+
+          <form id="pour-form">
+            <label>
+              US ZIP code
+              <input
+                id="zip"
+                name="zip"
+                inputmode="numeric"
+                pattern="\d{5}"
+                maxlength="5"
+                value="94612"
+                required
+              />
+            </label>
+
+            <label>
+              Pour date &amp; time
+              <input id="pour-date" name="pour_date" type="datetime-local" required />
+            </label>
+
+            <div class="row">
+              <label>
+                Cement
+                <select id="cement" name="cement_type">
+                  <option value="Type_I" selected>Type I</option>
+                  <option value="Type_II">Type II</option>
+                  <option value="Type_III">Type III (high-early)</option>
+                  <option value="Type_IL">Type IL</option>
+                </select>
+              </label>
+              <label>
+                Target psi
+                <input id="psi" name="target_psi" type="number" min="2500" max="10000" step="500" value="4000" />
+              </label>
+            </div>
+
+            <div class="row">
+              <label>
+                Thickness (in)
+                <input id="thickness" name="thickness" type="number" min="1" max="36" step="0.5" value="4" />
+              </label>
+              <label>
+                Concrete temp °F
+                <input id="concrete-temp" name="concrete_temp_f" type="number" min="20" max="120" step="1" placeholder="air + 5°F" />
+              </label>
+            </div>
+
+            <button type="submit" id="submit-btn">Check this pour</button>
+            <p id="form-error" class="form-error" hidden></p>
+          </form>
+        </section>
+
+        <section class="result" id="result" aria-live="polite">
+          <div class="empty" id="empty-state">
+            <p class="empty-kicker">Waiting on a ticket</p>
+            <p>Fill the pour ticket and run a check. You’ll get a stamp, the risk factors, a 48-hour forecast chart, and a mitigation note.</p>
+          </div>
+
+          <div id="result-body" hidden>
+            <div class="result-top">
+              <div id="stamp" class="stamp" data-status="WARNING">
+                <span class="stamp-kicker">Pour advisory</span>
+                <span id="stamp-status">WARNING</span>
+              </div>
+              <div class="result-meta">
+                <h2 id="result-location">—</h2>
+                <p id="result-when">—</p>
+              </div>
+            </div>
+
+            <ul id="risk-list" class="risk-list"></ul>
+
+            <dl class="metrics" id="metrics"></dl>
+
+            <div class="chart-wrap">
+              <h3>Pour window · 48 hours</h3>
+              <canvas id="forecast-chart" aria-label="Forecast chart"></canvas>
+            </div>
+
+            <div class="predictions" id="predictions"></div>
+            <blockquote class="mitigation" id="mitigation"></blockquote>
+            <p class="disclaimer" id="disclaimer"></p>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="/app.js"></script>
+  </body>
+</html>
