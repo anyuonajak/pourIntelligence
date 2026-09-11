@@ -197,6 +197,16 @@ button#submit-btn:disabled {
   font-size: 0.95rem;
 }
 
+.ticket-foot {
+  margin: 10px 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.ticket-foot a {
+  color: var(--ink);
+}
+
 .result {
   padding: 22px;
   min-height: 100%;
