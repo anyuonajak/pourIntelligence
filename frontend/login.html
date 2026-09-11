@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin sign in — Pour Intelligence</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="masthead">
+        <div class="brand">
+          <p class="eyebrow">Internal</p>
+          <h1>Sign in</h1>
+          <p class="tagline">Checks, outcomes, and API keys.</p>
+        </div>
+      </header>
+      <section class="ticket" style="max-width: 360px">
+        <form id="login-form">
+          <label>
+            Username
+            <input id="username" name="username" value="admin" autocomplete="username" required />
+          </label>
+          <label>
+            Password
+            <input id="password" name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit" id="login-btn">Enter</button>
+          <p id="login-error" class="form-error" hidden></p>
+        </form>
+      </section>
+    </div>
+    <script>
+      const form = document.querySelector("#login-form");
+      const errorEl = document.querySelector("#login-error");
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        errorEl.hidden = true;
+        const response = await fetch("/admin/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: document.querySelector("#username").value,
+            password: document.querySelector("#password").value,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          errorEl.hidden = false;
+          errorEl.textContent = payload.detail || "Could not sign in.";
+          return;
+        }
+        window.location.href = "/admin";
+      });
+    </script>
+  </body>
+</html>

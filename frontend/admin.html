@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin — Pour Intelligence</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="masthead">
+        <div class="brand">
+          <p class="eyebrow">Internal</p>
+          <h1>Admin</h1>
+          <p class="tagline">Did GO pours actually succeed? Mint and revoke vendor keys.</p>
+        </div>
+        <button type="button" id="logout-btn" class="text-btn">Sign out</button>
+      </header>
+
+      <nav class="admin-tabs" role="tablist">
+        <button type="button" class="active" data-tab="checks">Checks vs outcomes</button>
+        <button type="button" data-tab="keys">API keys</button>
+      </nav>
+
+      <section id="tab-checks">
+        <dl class="metrics" id="summary"></dl>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Site</th>
+                <th>Model</th>
+                <th>Outcome</th>
+                <th>Source</th>
+              </tr>
+            </thead>
+            <tbody id="checks-body">
+              <tr>
+                <td colspan="5">Loading…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="tab-keys" hidden>
+        <form id="key-form" class="ticket key-form">
+          <label>
+            Key name
+            <input id="key-name" name="name" placeholder="QuoteIQ sandbox" required />
+          </label>
+          <label>
+            Rate limit / hour
+            <input id="key-limit" name="rate_limit_per_hour" type="number" min="1" max="10000" value="300" />
+          </label>
+          <button type="submit">Mint key</button>
+        </form>
+        <p id="new-key" class="new-key" hidden></p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Prefix</th>
+                <th>Limit</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="keys-body">
+              <tr>
+                <td colspan="5">Loading…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+    <script src="/admin.js"></script>
+  </body>
+</html>

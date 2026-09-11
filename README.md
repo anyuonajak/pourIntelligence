@@ -16,6 +16,7 @@ This is an advisory tool, not a substitute for project specifications or the eng
 - Supabase Postgres (checks, outcomes, weather cache, API keys)
 - Demo rate limit (30/hour/IP) and optional `X-API-Key` for vendors
 - Terms at `/terms`
+- Admin at `/admin` (checks vs outcomes, API key mint/revoke)
 
 ## Run locally
 
@@ -74,5 +75,12 @@ Health check: `GET /health`.
 1. Run `supabase/migrations/001_init.sql` in the Supabase SQL editor.
 2. Set env vars (Render already has `project_url` and `service_role`; those names work). Preferred names: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 3. Optional: `ALLOWED_ORIGINS=https://pourintelligence.onrender.com`
+4. Set `ADMIN_PASSWORD` (and optionally `ADMIN_USERNAME`, `SESSION_SECRET`) on Render.
 
-To mint a vendor key later, SHA-256 hash the secret and insert into `api_keys` (`key_hash`, `key_prefix`, `name`). Send it as `X-API-Key`.
+Sign in at `/admin`. Mint vendor keys there, then call the API as a second client:
+
+```bash
+export POUR_API_URL=https://pourintelligence.onrender.com
+export POUR_API_KEY='pi_live_...'
+python scripts/vendor_check.py
+```

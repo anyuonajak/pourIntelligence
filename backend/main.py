@@ -7,7 +7,9 @@ from uuid import uuid4
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.middleware.sessions import SessionMiddleware
 
+from .admin import router as admin_router
 from .config import get_settings
 from .db import check_exists, get_client, insert_pour_check, insert_pour_outcome, lookup_api_key
 from .formulas import evaluate_pour
@@ -47,6 +49,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Request-ID"],
 )
+app.add_middleware(SessionMiddleware, secret_key=settings.session_secret, same_site="lax", https_only=False)
+app.include_router(admin_router)
 
 
 def _client_ip(request: Request) -> str:

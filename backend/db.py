@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import UUID, uuid4
@@ -132,3 +133,116 @@ def check_exists(check_id: UUID) -> bool:
     except Exception:
         logger.exception("pour_check lookup failed")
         return False
+
+
+def _flatten_outcome(row: dict[str, Any]) -> Optional[dict[str, Any]]:
+    outcomes = row.get("pour_outcomes") or []
+    if isinstance(outcomes, dict):
+        outcomes = [outcomes]
+    return outcomes[0] if outcomes else None
+
+
+def list_checks(limit: int = 200) -> list[dict[str, Any]]:
+    client = get_client()
+    if client is None:
+        return []
+    try:
+        result = (
+            client.table("pour_checks")
+            .select(
+                "id,created_at,source,zip_code,go_no_go_status,risk_factors,location,pour_date,pour_outcomes(outcome,notes,created_at)"
+            )
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+    except Exception:
+        logger.exception("list_checks failed")
+        return []
+    rows: list[dict[str, Any]] = []
+    for row in result.data or []:
+        outcome = _flatten_outcome(row)
+        location = row.get("location") if isinstance(row.get("location"), dict) else {}
+        rows.append(
+            {
+                "id": row.get("id"),
+                "created_at": row.get("created_at"),
+                "source": row.get("source"),
+                "zip_code": row.get("zip_code"),
+                "location_name": location.get("name") if location else None,
+                "pour_date": row.get("pour_date"),
+                "go_no_go_status": row.get("go_no_go_status"),
+                "risk_factors": row.get("risk_factors") or [],
+                "outcome": outcome.get("outcome") if outcome else None,
+                "outcome_at": outcome.get("created_at") if outcome else None,
+                "outcome_notes": outcome.get("notes") if outcome else None,
+            }
+        )
+    return rows
+
+
+def summarize_checks(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    total = len(rows)
+    with_outcome = [row for row in rows if row.get("outcome")]
+    by_status: dict[str, int] = {}
+    by_outcome: dict[str, int] = {}
+    go_success = 0
+    go_bad = 0
+    for row in rows:
+        status = row.get("go_no_go_status") or "UNKNOWN"
+        by_status[status] = by_status.get(status, 0) + 1
+        outcome = row.get("outcome")
+        if outcome:
+            by_outcome[outcome] = by_outcome.get(outcome, 0) + 1
+        if status == "GO" and outcome == "success":
+            go_success += 1
+        if status == "GO" and outcome in {"cracked", "delayed"}:
+            go_bad += 1
+    return {
+        "total_checks": total,
+        "with_outcome": len(with_outcome),
+        "pending_outcome": total - len(with_outcome),
+        "by_status": by_status,
+        "by_outcome": by_outcome,
+        "go_and_success": go_success,
+        "go_and_failed": go_bad,
+    }
+
+
+def list_api_keys() -> list[dict[str, Any]]:
+    client = get_client()
+    if client is None:
+        return []
+    result = (
+        client.table("api_keys")
+        .select("id,created_at,name,key_prefix,active,rate_limit_per_hour")
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return result.data or []
+
+
+def create_api_key(name: str, rate_limit_per_hour: int) -> tuple[str, dict[str, Any]]:
+    client = get_client()
+    if client is None:
+        raise RuntimeError("Database is not configured.")
+    raw = "pi_live_" + secrets.token_urlsafe(24)
+    prefix = raw[:16]
+    row = {
+        "name": name.strip(),
+        "key_prefix": prefix,
+        "key_hash": hash_api_key(raw),
+        "active": True,
+        "rate_limit_per_hour": rate_limit_per_hour,
+    }
+    result = client.table("api_keys").insert(row).execute()
+    created = (result.data or [row])[0]
+    return raw, created
+
+
+def revoke_api_key(key_id: str) -> bool:
+    client = get_client()
+    if client is None:
+        raise RuntimeError("Database is not configured.")
+    result = client.table("api_keys").update({"active": False}).eq("id", key_id).execute()
+    return bool(result.data)
