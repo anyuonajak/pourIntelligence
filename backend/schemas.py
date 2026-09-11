@@ -1,6 +1,7 @@
 from datetime import datetime
 from enum import Enum
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -84,7 +85,15 @@ class HourlyPoint(BaseModel):
     evaporation_rate_lbs_sqft_hr: float
 
 
+DISCLAIMER = (
+    "Advisory only. This is not a substitute for ACI 305R/306R, project specifications, "
+    "or the engineer of record. Weather forecasts change; re-check on pour day."
+)
+
+
 class PourReadinessResponse(BaseModel):
+    api_version: str = "v1"
+    check_id: Optional[UUID] = None
     go_no_go_status: GoNoGoStatus
     risk_factors: list[str]
     risk_factor_details: list[RiskFactorDetail]
@@ -93,7 +102,25 @@ class PourReadinessResponse(BaseModel):
     recommended_mitigation: str
     location: LocationInfo
     hourly: list[HourlyPoint]
-    disclaimer: str = (
-        "Advisory only. This is not a substitute for ACI 305R/306R, project specifications, "
-        "or the engineer of record. Weather forecasts change; re-check on pour day."
-    )
+    disclaimer: str = DISCLAIMER
+
+
+class PourOutcome(str, Enum):
+    SUCCESS = "success"
+    CRACKED = "cracked"
+    DELAYED = "delayed"
+    OTHER = "other"
+
+
+class PourOutcomeRequest(BaseModel):
+    check_id: UUID
+    outcome: PourOutcome
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class PourOutcomeResponse(BaseModel):
+    api_version: str = "v1"
+    recorded: bool
+    check_id: UUID
+    outcome: PourOutcome
+    disclaimer: str = DISCLAIMER

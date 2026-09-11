@@ -361,6 +361,81 @@ button#submit-btn:disabled {
   color: var(--muted);
 }
 
+.outcome {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  background: var(--paper-2);
+}
+
+.outcome-kicker {
+  font-family: "Barlow Condensed", sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+
+.outcome p {
+  margin: 0 0 10px;
+}
+
+.outcome-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.outcome-buttons button {
+  font-family: "Barlow Condensed", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: #fffdf8;
+  border: 1px solid var(--ink);
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.outcome-buttons button:hover,
+.outcome-buttons button:disabled {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.outcome-status {
+  margin: 10px 0 0;
+  font-size: 0.95rem;
+}
+
+.site-foot {
+  margin-top: 22px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.site-foot a {
+  color: var(--ink);
+}
+
+.terms {
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  padding: 22px 24px 32px;
+  box-shadow: var(--shadow);
+  max-width: 720px;
+}
+
+.terms h2 {
+  font-family: "Barlow Condensed", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.terms p,
+.terms li {
+  line-height: 1.45;
+}
+
 @media (max-width: 860px) {
   .layout,
   .row {

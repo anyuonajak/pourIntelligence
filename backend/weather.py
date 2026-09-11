@@ -8,6 +8,8 @@ from datetime import date, datetime, timedelta
 import httpx
 from fastapi import HTTPException
 
+from .config import get_settings
+from .db import cache_key_for_weather, get_weather_cache, set_weather_cache
 from .formulas import WeatherHour
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
@@ -132,15 +134,28 @@ async def fetch_hourly(latitude: float, longitude: float, pour_date: datetime) -
         params["forecast_days"] = 16
         params["past_days"] = 3
 
+    settings = get_settings()
+    mode = "archive" if use_archive else "forecast"
+    key = cache_key_for_weather(latitude, longitude, pour_day.isoformat(), mode)
+    cached = get_weather_cache(key)
+    if cached:
+        hours, tz_name = _parse_hourly(cached)
+        if hours:
+            return hours, tz_name
+
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
             response = await client.get(url, params=params)
             response.raise_for_status()
-            hours, tz_name = _parse_hourly(response.json())
+            payload = response.json()
+            hours, tz_name = _parse_hourly(payload)
     except HTTPException:
         raise
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"Weather service error: {exc}") from exc
+
+    if hours:
+        set_weather_cache(key, payload, settings.weather_cache_minutes)
 
     if not hours:
         raise HTTPException(status_code=502, detail="Weather service returned no hourly data.")

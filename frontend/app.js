@@ -14,6 +14,8 @@ const metricsEl = document.querySelector("#metrics");
 const predictionsEl = document.querySelector("#predictions");
 const mitigationEl = document.querySelector("#mitigation");
 const disclaimerEl = document.querySelector("#disclaimer");
+const outcomeEl = document.querySelector("#outcome");
+const outcomeStatus = document.querySelector("#outcome-status");
 const presetButtons = document.querySelectorAll(".presets button");
 
 const NOGO_CODES = new Set([
@@ -23,6 +25,7 @@ const NOGO_CODES = new Set([
 ]);
 
 let chart;
+let currentCheckId = null;
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -174,6 +177,14 @@ function renderResult(payload, pourDateValue) {
   mitigationEl.textContent = payload.recommended_mitigation;
   disclaimerEl.textContent = payload.disclaimer;
   renderChart(payload.hourly);
+
+  currentCheckId = payload.check_id || null;
+  outcomeStatus.hidden = true;
+  outcomeStatus.textContent = "";
+  outcomeEl.hidden = !currentCheckId;
+  outcomeEl.querySelectorAll("button").forEach((button) => {
+    button.disabled = false;
+  });
 }
 
 async function checkPour(event) {
@@ -231,3 +242,31 @@ presetButtons.forEach((button) => {
 pourDateInput.value = defaultPourTime();
 document.querySelector('.presets button[data-zip="94612"]').classList.add("active");
 form.addEventListener("submit", checkPour);
+
+document.querySelectorAll("#outcome button").forEach((button) => {
+  button.addEventListener("click", async () => {
+    if (!currentCheckId) return;
+    outcomeEl.querySelectorAll("button").forEach((item) => {
+      item.disabled = true;
+    });
+    try {
+      const response = await fetch("/v1/pour-outcomes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ check_id: currentCheckId, outcome: button.dataset.outcome }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.detail || response.statusText);
+      }
+      outcomeStatus.hidden = false;
+      outcomeStatus.textContent = "Recorded. That helps validate the model.";
+    } catch (error) {
+      outcomeEl.querySelectorAll("button").forEach((item) => {
+        item.disabled = false;
+      });
+      outcomeStatus.hidden = false;
+      outcomeStatus.textContent = error.message || "Could not save that outcome.";
+    }
+  });
+});

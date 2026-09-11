@@ -124,10 +124,25 @@
 
             <div class="predictions" id="predictions"></div>
             <blockquote class="mitigation" id="mitigation"></blockquote>
+            <div id="outcome" class="outcome" hidden>
+              <p class="outcome-kicker">How did this pour go?</p>
+              <p>Your answer is stored against this check so we can compare the model to real results.</p>
+              <div class="outcome-buttons">
+                <button type="button" data-outcome="success">Succeeded</button>
+                <button type="button" data-outcome="cracked">Cracked</button>
+                <button type="button" data-outcome="delayed">Delayed</button>
+                <button type="button" data-outcome="other">Other</button>
+              </div>
+              <p id="outcome-status" class="outcome-status" hidden></p>
+            </div>
             <p class="disclaimer" id="disclaimer"></p>
           </div>
         </section>
       </main>
+      <footer class="site-foot">
+        <a href="/terms">Terms</a>
+        · Advisory only · Not a substitute for ACI 305R / 306R or the engineer of record
+      </footer>
     </div>
     <script src="/app.js"></script>
   </body>

@@ -12,8 +12,10 @@ This is an advisory tool, not a substitute for project specifications or the eng
 - Cold-weather and freezing checks (ACI 306R)
 - Simplified Nurse-Saul maturity for time-to-500-psi and 70% strength
 - A single-page demo UI served from the same app
-
-No auth and no database yet. Those are Week 1.
+- `POST /v1/pour-outcomes` — success / cracked / delayed / other, tied to a check
+- Supabase Postgres (checks, outcomes, weather cache, API keys)
+- Demo rate limit (30/hour/IP) and optional `X-API-Key` for vendors
+- Terms at `/terms`
 
 ## Run locally
 
@@ -66,3 +68,11 @@ The FastAPI app serves both the API and the demo page, so one web service is eno
 **Railway:** deploy from the repo. `Dockerfile` / `railway.toml` / `Procfile` are included.
 
 Health check: `GET /health`.
+
+## Supabase
+
+1. Run `supabase/migrations/001_init.sql` in the Supabase SQL editor.
+2. Set env vars (Render already has `project_url` and `service_role`; those names work). Preferred names: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+3. Optional: `ALLOWED_ORIGINS=https://pourintelligence.onrender.com`
+
+To mint a vendor key later, SHA-256 hash the secret and insert into `api_keys` (`key_hash`, `key_prefix`, `name`). Send it as `X-API-Key`.
