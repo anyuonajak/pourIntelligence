@@ -21,10 +21,10 @@
     <div class="page">
       <header class="masthead">
         <div class="brand">
-          <p class="eyebrow">Field advisory · ACI 305R / 306R</p>
+          <p class="eyebrow">Field advisory · ACI 305R / 306R · TMS 602</p>
           <h1>Pour Intelligence</h1>
           <p class="tagline">
-            Weather-physics go / no-go for a specific pour, on a specific date, at a specific site.
+            Weather-physics go / no-go for a specific pour or masonry lay-up, on a specific date, at a specific site.
           </p>
         </div>
         <p class="badge-note">Not a substitute for the engineer of record</p>
@@ -34,7 +34,12 @@
         <section class="ticket" aria-labelledby="ticket-heading">
           <div class="ticket-head">
             <h2 id="ticket-heading">Pour ticket</h2>
-            <p>Jobsite local time. Defaults are a typical Type I slab.</p>
+            <p id="ticket-sub">Jobsite local time. Defaults are a typical Type I slab.</p>
+          </div>
+
+          <div class="product-switch" role="group" aria-label="Product">
+            <button type="button" class="active" data-product="concrete">Concrete slab</button>
+            <button type="button" data-product="masonry">Masonry</button>
           </div>
 
           <div class="presets" role="group" aria-label="Example jobsites">
@@ -58,35 +63,63 @@
               />
             </label>
 
-            <label>
-              Pour date &amp; time
-              <input id="pour-date" name="pour_date" type="datetime-local" required />
-            </label>
-
             <div class="row">
               <label>
-                Cement
-                <select id="cement" name="cement_type">
-                  <option value="Type_I" selected>Type I</option>
-                  <option value="Type_II">Type II</option>
-                  <option value="Type_III">Type III (high-early)</option>
-                  <option value="Type_IL">Type IL</option>
-                </select>
-              </label>
-              <label>
-                Target psi
-                <input id="psi" name="target_psi" type="number" min="2500" max="10000" step="500" value="4000" />
+                Pour date &amp; time
+                <input id="pour-date" name="pour_date" type="datetime-local" required />
               </label>
             </div>
 
-            <div class="row">
+            <div id="fields-concrete">
+              <div class="row">
+                <label>
+                  Cement
+                  <select id="cement" name="cement_type">
+                    <option value="Type_I" selected>Type I</option>
+                    <option value="Type_II">Type II</option>
+                    <option value="Type_III">Type III (high-early)</option>
+                    <option value="Type_IL">Type IL</option>
+                  </select>
+                </label>
+                <label>
+                  Target psi
+                  <input id="psi" name="target_psi" type="number" min="2500" max="10000" step="500" value="4000" />
+                </label>
+              </div>
+              <div class="row">
+                <label>
+                  Thickness (in)
+                  <input id="thickness" name="thickness" type="number" min="1" max="36" step="0.5" value="4" />
+                </label>
+                <label>
+                  Concrete temp °F
+                  <input id="concrete-temp" name="concrete_temp_f" type="number" min="20" max="120" step="1" placeholder="air + 5°F" />
+                </label>
+              </div>
+            </div>
+
+            <div id="fields-masonry" hidden>
+              <div class="row">
+                <label>
+                  Units
+                  <select id="unit-type" name="unit_type">
+                    <option value="CMU" selected>CMU (block)</option>
+                    <option value="brick">Brick</option>
+                    <option value="stone">Stone</option>
+                  </select>
+                </label>
+                <label>
+                  Mortar
+                  <select id="mortar-type" name="mortar_type">
+                    <option value="Type_N" selected>Type N</option>
+                    <option value="Type_S">Type S</option>
+                    <option value="Type_M">Type M</option>
+                  </select>
+                </label>
+              </div>
               <label>
-                Thickness (in)
-                <input id="thickness" name="thickness" type="number" min="1" max="36" step="0.5" value="4" />
-              </label>
-              <label>
-                Concrete temp °F
-                <input id="concrete-temp" name="concrete_temp_f" type="number" min="20" max="120" step="1" placeholder="air + 5°F" />
+                Mortar temp °F
+                <input id="mortar-temp" name="mortar_temp_f" type="number" min="20" max="120" step="1" placeholder="air + 5°F" />
               </label>
             </div>
 

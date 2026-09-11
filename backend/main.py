@@ -13,6 +13,7 @@ from .admin import router as admin_router
 from .config import get_settings
 from .db import check_exists, get_client, insert_pour_check, insert_pour_outcome, lookup_api_key
 from .formulas import evaluate_pour
+from .formulas_masonry import evaluate_masonry
 from .rate_limit import limiter
 from .schemas import (
     LocationInfo,
@@ -20,6 +21,7 @@ from .schemas import (
     PourOutcomeResponse,
     PourReadinessRequest,
     PourReadinessResponse,
+    ProductType,
 )
 from .weather import fetch_hourly, resolve_location
 
@@ -120,12 +122,20 @@ async def pour_readiness(request: Request, body: PourReadinessRequest) -> PourRe
     )
     hourly, tz_name = await fetch_hourly(lat, lon, body.pour_date)
     try:
-        result = evaluate_pour(
-            pour_time=body.pour_date,
-            hourly=hourly,
-            mix=body.mix_design,
-            concrete_temp_f=body.concrete_temp_f,
-        )
+        if body.product == ProductType.MASONRY:
+            result = evaluate_masonry(
+                pour_time=body.pour_date,
+                hourly=hourly,
+                design=body.masonry_design,
+                mortar_temp_f=body.concrete_temp_f,
+            )
+        else:
+            result = evaluate_pour(
+                pour_time=body.pour_date,
+                hourly=hourly,
+                mix=body.mix_design,
+                concrete_temp_f=body.concrete_temp_f,
+            )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -133,10 +143,17 @@ async def pour_readiness(request: Request, body: PourReadinessRequest) -> PourRe
     referer = request.headers.get("referer") or ""
     source = "demo" if "pourintelligence" in referer or "localhost" in referer or "127.0.0.1" in referer else "api"
 
+    if body.product == ProductType.MASONRY:
+        stored_mix = body.masonry_design.model_dump(mode="json")
+    else:
+        stored_mix = body.mix_design.model_dump(mode="json")
+    stored_mix["product"] = body.product.value
+
     check_id = insert_pour_check(
         {
             "request_id": _request_id(request),
             "source": source,
+            "product": body.product.value,
             "api_key_id": api_key["id"] if api_key else None,
             "client_ip": _client_ip(request),
             "latitude": lat,
@@ -144,7 +161,7 @@ async def pour_readiness(request: Request, body: PourReadinessRequest) -> PourRe
             "zip_code": body.zip_code,
             "address": body.address,
             "pour_date": body.pour_date.isoformat(),
-            "mix_design": body.mix_design.model_dump(mode="json"),
+            "mix_design": stored_mix,
             "concrete_temp_f": body.concrete_temp_f,
             "go_no_go_status": result["go_no_go_status"].value,
             "risk_factors": result["risk_factors"],
@@ -163,6 +180,7 @@ async def pour_readiness(request: Request, body: PourReadinessRequest) -> PourRe
     )
 
     return PourReadinessResponse(
+        product=body.product,
         check_id=check_id,
         go_no_go_status=result["go_no_go_status"],
         risk_factors=result["risk_factors"],

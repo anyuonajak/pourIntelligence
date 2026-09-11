@@ -17,6 +17,7 @@ This is an advisory tool, not a substitute for project specifications or the eng
 - Demo rate limit (30/hour/IP) and optional `X-API-Key` for vendors
 - Terms at `/terms`
 - Admin at `/admin` (checks vs outcomes, API key mint/revoke)
+- Two products: concrete slabs (ACI 305R/306R) and masonry (TMS 602 / ACI 530.1)
 
 ## Run locally
 
@@ -72,7 +73,7 @@ Health check: `GET /health`.
 
 ## Supabase
 
-1. Run `supabase/migrations/001_init.sql` in the Supabase SQL editor.
+1. Run `supabase/migrations/001_init.sql` then `002_product.sql` in the Supabase SQL editor.
 2. Set env vars (Render already has `project_url` and `service_role`; those names work). Preferred names: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 3. Optional: `ALLOWED_ORIGINS=https://pourintelligence.onrender.com`
 4. Set `ADMIN_PASSWORD` (and optionally `ADMIN_USERNAME`, `SESSION_SECRET`) on Render.

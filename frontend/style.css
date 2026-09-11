@@ -249,6 +249,29 @@ h1 {
   border-color: var(--ink);
 }
 
+.product-switch {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+
+.product-switch button {
+  flex: 1;
+  font-family: "Barlow Condensed", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.85rem;
+  background: transparent;
+  border: 1px solid var(--ink);
+  padding: 8px 9px;
+  cursor: pointer;
+}
+
+.product-switch button.active {
+  background: var(--ink);
+  color: var(--paper);
+}
+
 form {
   display: grid;
   gap: 12px;

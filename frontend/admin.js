@@ -35,27 +35,45 @@ async function api(path, options = {}) {
   return payload;
 }
 
+let allChecks = [];
+let productFilter = "all";
+
+function filteredChecks() {
+  if (productFilter === "all") return allChecks;
+  return allChecks.filter((row) => (row.product || "concrete") === productFilter);
+}
+
 async function loadChecks() {
   const payload = await api("/admin/api/checks");
+  allChecks = payload.checks;
   const summary = payload.summary;
+  const byProduct = summary.by_product || {};
   summaryEl.innerHTML = "";
   summaryEl.append(
     metric("Checks", summary.total_checks),
+    metric("Concrete", byProduct.concrete || 0),
+    metric("Masonry", byProduct.masonry || 0),
     metric("With outcome", summary.with_outcome),
     metric("Pending", summary.pending_outcome),
     metric("GO + success", summary.go_and_success),
     metric("GO + cracked/delayed", summary.go_and_failed)
   );
+  renderCheckRows();
+}
 
+function renderCheckRows() {
+  const rows = filteredChecks();
   checksBody.innerHTML = "";
-  if (!payload.checks.length) {
-    checksBody.innerHTML = '<tr><td colspan="5">No checks stored yet.</td></tr>';
+  if (!rows.length) {
+    checksBody.innerHTML = '<tr><td colspan="6">No checks stored yet.</td></tr>';
     return;
   }
-  payload.checks.forEach((row) => {
+  rows.forEach((row) => {
     const tr = document.createElement("tr");
     const outcome = row.outcome || "pending";
+    const product = row.product || "concrete";
     tr.innerHTML = `<td>${fmt(row.created_at)}</td>
+      <td>${product}</td>
       <td>${row.location_name || row.zip_code || "—"}</td>
       <td><span class="pill" data-status="${row.go_no_go_status}">${row.go_no_go_status}</span></td>
       <td><span class="pill" data-outcome="${outcome}">${outcome}</span></td>
@@ -124,6 +142,15 @@ keyForm.addEventListener("submit", async (event) => {
 });
 
 loadChecks().catch((error) => {
-  checksBody.innerHTML = `<tr><td colspan="5">${error.message}</td></tr>`;
+  checksBody.innerHTML = `<tr><td colspan="6">${error.message}</td></tr>`;
 });
 loadKeys().catch(() => {});
+
+document.querySelectorAll("#product-filter button").forEach((button) => {
+  button.addEventListener("click", () => {
+    productFilter = button.dataset.filter;
+    document.querySelectorAll("#product-filter button").forEach((item) => item.classList.remove("active"));
+    button.classList.add("active");
+    renderCheckRows();
+  });
+});

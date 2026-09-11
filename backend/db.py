@@ -102,8 +102,12 @@ def insert_pour_check(row: dict[str, Any]) -> Optional[UUID]:
         return None
     try:
         check_id = row.get("id") or uuid4()
-        row = {**row, "id": str(check_id)}
-        client.table("pour_checks").insert(row).execute()
+        payload = {**row, "id": str(check_id)}
+        try:
+            client.table("pour_checks").insert(payload).execute()
+        except Exception:
+            payload.pop("product", None)
+            client.table("pour_checks").insert(payload).execute()
         return UUID(str(check_id))
     except Exception:
         logger.exception("pour_check insert failed")
@@ -150,24 +154,39 @@ def list_checks(limit: int = 200) -> list[dict[str, Any]]:
         result = (
             client.table("pour_checks")
             .select(
-                "id,created_at,source,zip_code,go_no_go_status,risk_factors,location,pour_date,pour_outcomes(outcome,notes,created_at)"
+                "id,created_at,source,zip_code,go_no_go_status,risk_factors,location,pour_date,mix_design,product,pour_outcomes(outcome,notes,created_at)"
             )
             .order("created_at", desc=True)
             .limit(limit)
             .execute()
         )
     except Exception:
-        logger.exception("list_checks failed")
-        return []
+        logger.exception("list_checks with product column failed; retrying without it")
+        try:
+            result = (
+                client.table("pour_checks")
+                .select(
+                    "id,created_at,source,zip_code,go_no_go_status,risk_factors,location,pour_date,mix_design,pour_outcomes(outcome,notes,created_at)"
+                )
+                .order("created_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+        except Exception:
+            logger.exception("list_checks failed")
+            return []
     rows: list[dict[str, Any]] = []
     for row in result.data or []:
         outcome = _flatten_outcome(row)
         location = row.get("location") if isinstance(row.get("location"), dict) else {}
+        mix = row.get("mix_design") if isinstance(row.get("mix_design"), dict) else {}
+        product = row.get("product") or mix.get("product") or "concrete"
         rows.append(
             {
                 "id": row.get("id"),
                 "created_at": row.get("created_at"),
                 "source": row.get("source"),
+                "product": product,
                 "zip_code": row.get("zip_code"),
                 "location_name": location.get("name") if location else None,
                 "pour_date": row.get("pour_date"),
@@ -186,11 +205,14 @@ def summarize_checks(rows: list[dict[str, Any]]) -> dict[str, Any]:
     with_outcome = [row for row in rows if row.get("outcome")]
     by_status: dict[str, int] = {}
     by_outcome: dict[str, int] = {}
+    by_product: dict[str, int] = {}
     go_success = 0
     go_bad = 0
     for row in rows:
         status = row.get("go_no_go_status") or "UNKNOWN"
+        product = row.get("product") or "concrete"
         by_status[status] = by_status.get(status, 0) + 1
+        by_product[product] = by_product.get(product, 0) + 1
         outcome = row.get("outcome")
         if outcome:
             by_outcome[outcome] = by_outcome.get(outcome, 0) + 1
@@ -204,6 +226,7 @@ def summarize_checks(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "pending_outcome": total - len(with_outcome),
         "by_status": by_status,
         "by_outcome": by_outcome,
+        "by_product": by_product,
         "go_and_success": go_success,
         "go_and_failed": go_bad,
     }

@@ -25,16 +25,40 @@ class MixDesign(BaseModel):
     thickness_inches: float = Field(default=4, ge=1, le=36)
 
 
+class UnitType(str, Enum):
+    CMU = "CMU"
+    BRICK = "brick"
+    STONE = "stone"
+
+
+class MortarType(str, Enum):
+    TYPE_N = "Type_N"
+    TYPE_S = "Type_S"
+    TYPE_M = "Type_M"
+
+
+class MasonryDesign(BaseModel):
+    unit_type: UnitType = UnitType.CMU
+    mortar_type: MortarType = MortarType.TYPE_N
+
+
+class ProductType(str, Enum):
+    CONCRETE = "concrete"
+    MASONRY = "masonry"
+
+
 class PourReadinessRequest(BaseModel):
+    product: ProductType = ProductType.CONCRETE
     latitude: Optional[float] = Field(default=None, ge=-90, le=90)
     longitude: Optional[float] = Field(default=None, ge=-180, le=180)
     zip_code: Optional[str] = Field(default=None, description="US 5-digit ZIP")
     address: Optional[str] = Field(default=None, description="Free-text place name or address")
     pour_date: datetime
     mix_design: MixDesign = Field(default_factory=MixDesign)
+    masonry_design: MasonryDesign = Field(default_factory=MasonryDesign)
     concrete_temp_f: Optional[float] = Field(
         default=None,
-        description="Fresh concrete temperature. If omitted, approximated as air temperature + 5°F.",
+        description="Fresh concrete or mortar temperature. If omitted, approximated as air temperature + 5°F.",
     )
 
     @model_validator(mode="after")
@@ -74,6 +98,7 @@ class Metrics(BaseModel):
 class Predictions(BaseModel):
     estimated_time_to_500_psi_hours: Optional[int] = None
     estimated_days_to_70_percent_strength: Optional[float] = None
+    protection_period_hours: Optional[int] = None
 
 
 class HourlyPoint(BaseModel):
@@ -86,13 +111,14 @@ class HourlyPoint(BaseModel):
 
 
 DISCLAIMER = (
-    "Advisory only. This is not a substitute for ACI 305R/306R, project specifications, "
-    "or the engineer of record. Weather forecasts change; re-check on pour day."
+    "Advisory only. This is not a substitute for ACI 305R/306R, TMS 602 / ACI 530.1, "
+    "project specifications, or the engineer of record. Weather forecasts change; re-check on pour day."
 )
 
 
 class PourReadinessResponse(BaseModel):
     api_version: str = "v1"
+    product: ProductType = ProductType.CONCRETE
     check_id: Optional[UUID] = None
     go_no_go_status: GoNoGoStatus
     risk_factors: list[str]

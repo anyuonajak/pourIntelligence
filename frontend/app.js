@@ -22,10 +22,12 @@ const NOGO_CODES = new Set([
   "EXTREME_EVAPORATION_RATE",
   "FREEZING_BEFORE_500_PSI",
   "HEAVY_RAIN_DURING_POUR",
+  "MASONRY_BELOW_20F",
 ]);
 
 let chart;
 let currentCheckId = null;
+let currentProduct = "concrete";
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -133,6 +135,8 @@ function renderResult(payload, pourDateValue) {
   const status = payload.go_no_go_status;
   stamp.dataset.status = status;
   stampStatus.textContent = status.replace("_", "-");
+  document.querySelector(".stamp-kicker").textContent =
+    payload.product === "masonry" ? "Lay advisory" : "Pour advisory";
   resultLocation.textContent = payload.location.name;
   resultWhen.textContent = formatWhen(pourDateValue, payload.location.timezone);
 
@@ -151,10 +155,11 @@ function renderResult(payload, pourDateValue) {
   }
 
   const metrics = payload.metrics;
+  const materialLabel = payload.product === "masonry" ? "Mortar temp" : "Concrete temp";
   metricsEl.innerHTML = "";
   metricsEl.append(
     metric("Air temp", `${metrics.ambient_temp_f} °F`),
-    metric("Concrete temp", `${metrics.concrete_temp_f} °F`),
+    metric(materialLabel, `${metrics.concrete_temp_f} °F`),
     metric("Relative humidity", `${metrics.relative_humidity_pct}%`),
     metric("Wind", `${metrics.wind_speed_mph} mph`),
     metric("Evaporation", `${metrics.calculated_evaporation_rate_lbs_sqft_hr} lb/ft²/hr`),
@@ -164,15 +169,23 @@ function renderResult(payload, pourDateValue) {
   );
 
   const predictions = payload.predictions;
-  const timeTo500 =
-    predictions.estimated_time_to_500_psi_hours == null
-      ? "500 psi: not reached in forecast"
-      : `500 psi: ~${predictions.estimated_time_to_500_psi_hours} hr`;
-  const timeTo70 =
-    predictions.estimated_days_to_70_percent_strength == null
-      ? "70% strength: not reached in forecast"
-      : `70% strength: ~${predictions.estimated_days_to_70_percent_strength} days`;
-  predictionsEl.innerHTML = `<span>${timeTo500}</span><span>${timeTo70}</span>`;
+  if (payload.product === "masonry") {
+    const protect =
+      predictions.protection_period_hours == null
+        ? "Protection window: see TMS 602"
+        : `Protect wall ~${predictions.protection_period_hours} hr after laying`;
+    predictionsEl.innerHTML = `<span>${protect}</span><span>TMS 602 / ACI 530.1</span>`;
+  } else {
+    const timeTo500 =
+      predictions.estimated_time_to_500_psi_hours == null
+        ? "500 psi: not reached in forecast"
+        : `500 psi: ~${predictions.estimated_time_to_500_psi_hours} hr`;
+    const timeTo70 =
+      predictions.estimated_days_to_70_percent_strength == null
+        ? "70% strength: not reached in forecast"
+        : `70% strength: ~${predictions.estimated_days_to_70_percent_strength} days`;
+    predictionsEl.innerHTML = `<span>${timeTo500}</span><span>${timeTo70}</span>`;
+  }
 
   mitigationEl.textContent = payload.recommended_mitigation;
   disclaimerEl.textContent = payload.disclaimer;
@@ -195,19 +208,26 @@ async function checkPour(event) {
 
   const zip = zipInput.value.trim();
   const pourDate = pourDateInput.value;
-  const concreteTemp = document.querySelector("#concrete-temp").value;
-
   const body = {
+    product: currentProduct,
     zip_code: zip,
     pour_date: `${pourDate}:00`,
-    mix_design: {
+  };
+  if (currentProduct === "masonry") {
+    body.masonry_design = {
+      unit_type: document.querySelector("#unit-type").value,
+      mortar_type: document.querySelector("#mortar-type").value,
+    };
+    const mortarTemp = document.querySelector("#mortar-temp").value;
+    if (mortarTemp) body.concrete_temp_f = Number(mortarTemp);
+  } else {
+    body.mix_design = {
       cement_type: document.querySelector("#cement").value,
       target_psi: Number(document.querySelector("#psi").value),
       thickness_inches: Number(document.querySelector("#thickness").value),
-    },
-  };
-  if (concreteTemp) {
-    body.concrete_temp_f = Number(concreteTemp);
+    };
+    const concreteTemp = document.querySelector("#concrete-temp").value;
+    if (concreteTemp) body.concrete_temp_f = Number(concreteTemp);
   }
 
   try {
@@ -227,7 +247,7 @@ async function checkPour(event) {
     showError(error.message || "Could not check this pour.");
   } finally {
     submitBtn.disabled = false;
-    submitBtn.textContent = "Check this pour";
+    submitBtn.textContent = currentProduct === "masonry" ? "Check this lay-up" : "Check this pour";
   }
 }
 
@@ -242,6 +262,22 @@ presetButtons.forEach((button) => {
 pourDateInput.value = defaultPourTime();
 document.querySelector('.presets button[data-zip="94612"]').classList.add("active");
 form.addEventListener("submit", checkPour);
+
+document.querySelectorAll(".product-switch button").forEach((button) => {
+  button.addEventListener("click", () => {
+    currentProduct = button.dataset.product;
+    document.querySelectorAll(".product-switch button").forEach((item) => item.classList.remove("active"));
+    button.classList.add("active");
+    const masonry = currentProduct === "masonry";
+    document.querySelector("#fields-concrete").hidden = masonry;
+    document.querySelector("#fields-masonry").hidden = !masonry;
+    document.querySelector("#ticket-heading").textContent = masonry ? "Masonry ticket" : "Pour ticket";
+    document.querySelector("#ticket-sub").textContent = masonry
+      ? "Jobsite local time. TMS 602 / ACI 530.1 hot- and cold-weather masonry."
+      : "Jobsite local time. Defaults are a typical Type I slab.";
+    submitBtn.textContent = masonry ? "Check this lay-up" : "Check this pour";
+  });
+});
 
 document.querySelectorAll("#outcome button").forEach((button) => {
   button.addEventListener("click", async () => {

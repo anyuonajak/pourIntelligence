@@ -29,12 +29,18 @@
       </nav>
 
       <section id="tab-checks">
+        <div class="presets" id="product-filter" role="group" aria-label="Filter by product">
+          <button type="button" class="active" data-filter="all">All</button>
+          <button type="button" data-filter="concrete">Concrete</button>
+          <button type="button" data-filter="masonry">Masonry</button>
+        </div>
         <dl class="metrics" id="summary"></dl>
         <div class="table-wrap">
           <table class="data-table">
             <thead>
               <tr>
                 <th>When</th>
+                <th>Product</th>
                 <th>Site</th>
                 <th>Model</th>
                 <th>Outcome</th>
