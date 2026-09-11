@@ -86,7 +86,7 @@ def test_demo_assets_are_cache_busted():
     client = TestClient(app)
     page = client.get("/")
     assert 'href="/style.css?v=2"' in page.text
-    assert 'src="/app.js?v=2"' in page.text
+    assert 'src="/app.js?v=3"' in page.text
     assert 'id="empty-kicker"' in page.text
     admin = client.get("/admin/login")
     assert 'href="/style.css?v=2"' in admin.text

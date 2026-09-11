@@ -27,7 +27,7 @@ const NOGO_CODES = new Set([
 
 const COPY = {
   concrete: {
-    heading: "Pour ticket",
+    heading: "Concrete slab ticket",
     sub: "Jobsite local time. Defaults are a typical Type I slab.",
     submit: "Check this pour",
     emptyKicker: "Waiting on a concrete ticket",
