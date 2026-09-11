@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/style.css?v=2" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   </head>
   <body>
@@ -65,7 +65,7 @@
 
             <div class="row">
               <label>
-                Pour date &amp; time
+                <span id="date-label">Pour date &amp; time</span>
                 <input id="pour-date" name="pour_date" type="datetime-local" required />
               </label>
             </div>
@@ -133,8 +133,8 @@
 
         <section class="result" id="result" aria-live="polite">
           <div class="empty" id="empty-state">
-            <p class="empty-kicker">Waiting on a ticket</p>
-            <p>Fill the pour ticket and run a check. You’ll get a stamp, the risk factors, a 48-hour forecast chart, and a mitigation note.</p>
+            <p class="empty-kicker" id="empty-kicker">Waiting on a concrete ticket</p>
+            <p id="empty-body">Fill the concrete slab ticket and run a check. You’ll get an ACI 305R / 306R stamp, risk factors, a 48-hour forecast chart, and a mitigation note.</p>
           </div>
 
           <div id="result-body" hidden>
@@ -154,14 +154,14 @@
             <dl class="metrics" id="metrics"></dl>
 
             <div class="chart-wrap">
-              <h3>Pour window · 48 hours</h3>
+              <h3 id="chart-title">Pour window · 48 hours</h3>
               <canvas id="forecast-chart" aria-label="Forecast chart"></canvas>
             </div>
 
             <div class="predictions" id="predictions"></div>
             <blockquote class="mitigation" id="mitigation"></blockquote>
             <div id="outcome" class="outcome" hidden>
-              <p class="outcome-kicker">How did this pour go?</p>
+              <p class="outcome-kicker" id="outcome-kicker">How did this pour go?</p>
               <p>Your answer is stored against this check so we can compare the model to real results.</p>
               <div class="outcome-buttons">
                 <button type="button" data-outcome="success">Succeeded</button>
@@ -180,6 +180,6 @@
         · Advisory only · Not a substitute for ACI 305R / 306R or the engineer of record
       </footer>
     </div>
-    <script src="/app.js"></script>
+    <script src="/app.js?v=2"></script>
   </body>
 </html>

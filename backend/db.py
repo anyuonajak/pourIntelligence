@@ -8,6 +8,8 @@ from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from .config import get_settings
+from .formulas import RISK_COPY as CONCRETE_RISK_COPY
+from .formulas_masonry import RISK_COPY as MASONRY_RISK_COPY
 
 logger = logging.getLogger("pourintelligence")
 
@@ -146,6 +148,59 @@ def _flatten_outcome(row: dict[str, Any]) -> Optional[dict[str, Any]]:
     return outcomes[0] if outcomes else None
 
 
+CHECK_SELECT = (
+    "id,created_at,source,zip_code,go_no_go_status,risk_factors,location,pour_date,"
+    "mix_design,product,metrics,predictions,recommended_mitigation,concrete_temp_f,"
+    "pour_outcomes(outcome,notes,created_at)"
+)
+CHECK_SELECT_WITHOUT_PRODUCT = (
+    "id,created_at,source,zip_code,go_no_go_status,risk_factors,location,pour_date,"
+    "mix_design,metrics,predictions,recommended_mitigation,concrete_temp_f,"
+    "pour_outcomes(outcome,notes,created_at)"
+)
+
+
+def _risk_details(codes: Any, product: str) -> list[dict[str, str]]:
+    source = MASONRY_RISK_COPY if product == "masonry" else CONCRETE_RISK_COPY
+    details: list[dict[str, str]] = []
+    for code in codes or []:
+        if not isinstance(code, str):
+            continue
+        if code in source:
+            label, detail = source[code]
+        else:
+            label, detail = code.replace("_", " ").title(), ""
+        details.append({"code": code, "label": label, "detail": detail})
+    return details
+
+
+def serialize_check(row: dict[str, Any]) -> dict[str, Any]:
+    outcome = _flatten_outcome(row)
+    location = row.get("location") if isinstance(row.get("location"), dict) else {}
+    mix = row.get("mix_design") if isinstance(row.get("mix_design"), dict) else {}
+    product = row.get("product") or mix.get("product") or "concrete"
+    return {
+        "id": row.get("id"),
+        "created_at": row.get("created_at"),
+        "source": row.get("source"),
+        "product": product,
+        "zip_code": row.get("zip_code"),
+        "location_name": location.get("name") if location else None,
+        "pour_date": row.get("pour_date"),
+        "go_no_go_status": row.get("go_no_go_status"),
+        "risk_factors": row.get("risk_factors") or [],
+        "risk_factor_details": _risk_details(row.get("risk_factors") or [], product),
+        "mix_design": mix,
+        "metrics": row.get("metrics") if isinstance(row.get("metrics"), dict) else {},
+        "predictions": row.get("predictions") if isinstance(row.get("predictions"), dict) else {},
+        "recommended_mitigation": row.get("recommended_mitigation"),
+        "concrete_temp_f": row.get("concrete_temp_f"),
+        "outcome": outcome.get("outcome") if outcome else None,
+        "outcome_at": outcome.get("created_at") if outcome else None,
+        "outcome_notes": outcome.get("notes") if outcome else None,
+    }
+
+
 def list_checks(limit: int = 200) -> list[dict[str, Any]]:
     client = get_client()
     if client is None:
@@ -153,9 +208,7 @@ def list_checks(limit: int = 200) -> list[dict[str, Any]]:
     try:
         result = (
             client.table("pour_checks")
-            .select(
-                "id,created_at,source,zip_code,go_no_go_status,risk_factors,location,pour_date,mix_design,product,pour_outcomes(outcome,notes,created_at)"
-            )
+            .select(CHECK_SELECT)
             .order("created_at", desc=True)
             .limit(limit)
             .execute()
@@ -165,9 +218,7 @@ def list_checks(limit: int = 200) -> list[dict[str, Any]]:
         try:
             result = (
                 client.table("pour_checks")
-                .select(
-                    "id,created_at,source,zip_code,go_no_go_status,risk_factors,location,pour_date,mix_design,pour_outcomes(outcome,notes,created_at)"
-                )
+                .select(CHECK_SELECT_WITHOUT_PRODUCT)
                 .order("created_at", desc=True)
                 .limit(limit)
                 .execute()
@@ -175,29 +226,7 @@ def list_checks(limit: int = 200) -> list[dict[str, Any]]:
         except Exception:
             logger.exception("list_checks failed")
             return []
-    rows: list[dict[str, Any]] = []
-    for row in result.data or []:
-        outcome = _flatten_outcome(row)
-        location = row.get("location") if isinstance(row.get("location"), dict) else {}
-        mix = row.get("mix_design") if isinstance(row.get("mix_design"), dict) else {}
-        product = row.get("product") or mix.get("product") or "concrete"
-        rows.append(
-            {
-                "id": row.get("id"),
-                "created_at": row.get("created_at"),
-                "source": row.get("source"),
-                "product": product,
-                "zip_code": row.get("zip_code"),
-                "location_name": location.get("name") if location else None,
-                "pour_date": row.get("pour_date"),
-                "go_no_go_status": row.get("go_no_go_status"),
-                "risk_factors": row.get("risk_factors") or [],
-                "outcome": outcome.get("outcome") if outcome else None,
-                "outcome_at": outcome.get("created_at") if outcome else None,
-                "outcome_notes": outcome.get("notes") if outcome else None,
-            }
-        )
-    return rows
+    return [serialize_check(row) for row in result.data or []]
 
 
 def summarize_checks(rows: list[dict[str, Any]]) -> dict[str, Any]:

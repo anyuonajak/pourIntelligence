@@ -25,9 +25,40 @@ const NOGO_CODES = new Set([
   "MASONRY_BELOW_20F",
 ]);
 
+const COPY = {
+  concrete: {
+    heading: "Pour ticket",
+    sub: "Jobsite local time. Defaults are a typical Type I slab.",
+    submit: "Check this pour",
+    emptyKicker: "Waiting on a concrete ticket",
+    emptyBody:
+      "Fill the concrete slab ticket and run a check. You’ll get an ACI 305R / 306R stamp, risk factors, a 48-hour forecast chart, and a mitigation note.",
+    dateLabel: "Pour date & time",
+    outcomeKicker: "How did this pour go?",
+    chartTitle: "Pour window · 48 hours",
+    checking: "Checking forecast…",
+    error: "Could not check this pour.",
+  },
+  masonry: {
+    heading: "Masonry ticket",
+    sub: "Jobsite local time. TMS 602 / ACI 530.1 hot- and cold-weather masonry.",
+    submit: "Check this lay-up",
+    emptyKicker: "Waiting on a masonry ticket",
+    emptyBody:
+      "Fill the masonry ticket and run a check. You’ll get a TMS 602 stamp, risk factors, a 48-hour forecast chart, and a protection note.",
+    dateLabel: "Lay-up date & time",
+    outcomeKicker: "How did this lay-up go?",
+    chartTitle: "Lay-up window · 48 hours",
+    checking: "Checking forecast…",
+    error: "Could not check this lay-up.",
+  },
+};
+
 let chart;
 let currentCheckId = null;
 let currentProduct = "concrete";
+let inFlightProduct = null;
+const lastByProduct = { concrete: null, masonry: null };
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -37,7 +68,9 @@ function defaultPourTime() {
   const date = new Date();
   date.setDate(date.getDate() + 1);
   date.setHours(8, 0, 0, 0);
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
 }
 
 function showError(message) {
@@ -60,6 +93,75 @@ function metric(label, value) {
   return wrap;
 }
 
+function destroyChart() {
+  if (chart) {
+    chart.destroy();
+    chart = null;
+  }
+}
+
+function clearResultPanel() {
+  currentCheckId = null;
+  stamp.dataset.status = "";
+  stampStatus.textContent = "";
+  document.querySelector(".stamp-kicker").textContent = "";
+  resultLocation.textContent = "";
+  resultWhen.textContent = "";
+  riskList.innerHTML = "";
+  metricsEl.innerHTML = "";
+  predictionsEl.innerHTML = "";
+  mitigationEl.textContent = "";
+  disclaimerEl.textContent = "";
+  outcomeStatus.hidden = true;
+  outcomeStatus.textContent = "";
+  outcomeEl.hidden = true;
+  destroyChart();
+}
+
+function showEmptyState() {
+  const copy = COPY[currentProduct];
+  document.querySelector("#empty-kicker").textContent = copy.emptyKicker;
+  document.querySelector("#empty-body").textContent = copy.emptyBody;
+  emptyState.hidden = false;
+  resultBody.hidden = true;
+  clearResultPanel();
+}
+
+function applyProductChrome(product) {
+  const copy = COPY[product];
+  const masonry = product === "masonry";
+  document.querySelectorAll(".product-switch button").forEach((button) => {
+    button.classList.toggle("active", button.dataset.product === product);
+  });
+  document.querySelector("#fields-concrete").hidden = masonry;
+  document.querySelector("#fields-masonry").hidden = !masonry;
+  document.querySelector("#ticket-heading").textContent = copy.heading;
+  document.querySelector("#ticket-sub").textContent = copy.sub;
+  document.querySelector("#date-label").textContent = copy.dateLabel;
+  document.querySelector("#chart-title").textContent = copy.chartTitle;
+  document.querySelector("#outcome-kicker").textContent = copy.outcomeKicker;
+  document.body.dataset.product = product;
+  if (inFlightProduct === product) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = copy.checking;
+  } else {
+    submitBtn.disabled = false;
+    submitBtn.textContent = copy.submit;
+  }
+}
+
+function selectProduct(product) {
+  currentProduct = product;
+  applyProductChrome(product);
+  showError("");
+  const cached = lastByProduct[product];
+  if (cached) {
+    paintResult(cached.payload, cached.pourDateValue);
+  } else {
+    showEmptyState();
+  }
+}
+
 function renderChart(hourly) {
   const canvas = document.querySelector("#forecast-chart");
   const labels = hourly.map((point) => point.time.slice(11, 16));
@@ -67,9 +169,7 @@ function renderChart(hourly) {
   const humidity = hourly.map((point) => point.relative_humidity_pct);
   const evaporation = hourly.map((point) => point.evaporation_rate_lbs_sqft_hr);
 
-  if (chart) {
-    chart.destroy();
-  }
+  destroyChart();
 
   chart = new Chart(canvas, {
     type: "line",
@@ -128,7 +228,7 @@ function renderChart(hourly) {
   });
 }
 
-function renderResult(payload, pourDateValue) {
+function paintResult(payload, pourDateValue) {
   emptyState.hidden = true;
   resultBody.hidden = false;
 
@@ -141,12 +241,14 @@ function renderResult(payload, pourDateValue) {
   resultWhen.textContent = formatWhen(pourDateValue, payload.location.timezone);
 
   riskList.innerHTML = "";
-  if (!payload.risk_factor_details.length) {
+  const details = payload.risk_factor_details || [];
+  if (!details.length) {
     const item = document.createElement("li");
-    item.innerHTML = "<strong>No risk factors triggered</strong>Forecast conditions sit inside normal placement ranges.";
+    item.innerHTML =
+      "<strong>No risk factors triggered</strong>Forecast conditions sit inside normal placement ranges.";
     riskList.append(item);
   } else {
-    payload.risk_factor_details.forEach((factor) => {
+    details.forEach((factor) => {
       const item = document.createElement("li");
       if (NOGO_CODES.has(factor.code)) item.dataset.severity = "nogo";
       item.innerHTML = `<strong>${factor.label}</strong>${factor.detail}`;
@@ -156,6 +258,7 @@ function renderResult(payload, pourDateValue) {
 
   const metrics = payload.metrics;
   const materialLabel = payload.product === "masonry" ? "Mortar temp" : "Concrete temp";
+  const rainLabel = payload.product === "masonry" ? "Rain at lay-up" : "Rain at pour";
   metricsEl.innerHTML = "";
   metricsEl.append(
     metric("Air temp", `${metrics.ambient_temp_f} °F`),
@@ -163,7 +266,7 @@ function renderResult(payload, pourDateValue) {
     metric("Relative humidity", `${metrics.relative_humidity_pct}%`),
     metric("Wind", `${metrics.wind_speed_mph} mph`),
     metric("Evaporation", `${metrics.calculated_evaporation_rate_lbs_sqft_hr} lb/ft²/hr`),
-    metric("Rain at pour", `${metrics.precipitation_in} in`),
+    metric(rainLabel, `${metrics.precipitation_in} in`),
     metric("Min next 24h", metrics.min_temp_next_24h_f == null ? "—" : `${metrics.min_temp_next_24h_f} °F`),
     metric("Min next 48h", metrics.min_temp_next_48h_f == null ? "—" : `${metrics.min_temp_next_48h_f} °F`)
   );
@@ -189,7 +292,7 @@ function renderResult(payload, pourDateValue) {
 
   mitigationEl.textContent = payload.recommended_mitigation;
   disclaimerEl.textContent = payload.disclaimer;
-  renderChart(payload.hourly);
+  renderChart(payload.hourly || []);
 
   currentCheckId = payload.check_id || null;
   outcomeStatus.hidden = true;
@@ -200,20 +303,27 @@ function renderResult(payload, pourDateValue) {
   });
 }
 
+function cacheResult(product, payload, pourDateValue) {
+  lastByProduct[product] = { payload, pourDateValue };
+}
+
 async function checkPour(event) {
   event.preventDefault();
+  const product = currentProduct;
+  const copy = COPY[product];
   showError("");
   submitBtn.disabled = true;
-  submitBtn.textContent = "Checking forecast…";
+  submitBtn.textContent = copy.checking;
+  inFlightProduct = product;
 
   const zip = zipInput.value.trim();
   const pourDate = pourDateInput.value;
   const body = {
-    product: currentProduct,
+    product,
     zip_code: zip,
     pour_date: `${pourDate}:00`,
   };
-  if (currentProduct === "masonry") {
+  if (product === "masonry") {
     body.masonry_design = {
       unit_type: document.querySelector("#unit-type").value,
       mortar_type: document.querySelector("#mortar-type").value,
@@ -242,12 +352,22 @@ async function checkPour(event) {
       const message = Array.isArray(detail) ? detail.map((item) => item.msg).join(" ") : detail || response.statusText;
       throw new Error(message);
     }
-    renderResult(payload, pourDate);
+    cacheResult(product, payload, pourDate);
+    if (currentProduct === product) {
+      paintResult(payload, pourDate);
+    }
   } catch (error) {
-    showError(error.message || "Could not check this pour.");
+    if (currentProduct === product) {
+      showError(error.message || copy.error);
+    }
   } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = currentProduct === "masonry" ? "Check this lay-up" : "Check this pour";
+    if (inFlightProduct === product) {
+      inFlightProduct = null;
+    }
+    if (currentProduct === product) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = COPY[currentProduct].submit;
+    }
   }
 }
 
@@ -265,17 +385,7 @@ form.addEventListener("submit", checkPour);
 
 document.querySelectorAll(".product-switch button").forEach((button) => {
   button.addEventListener("click", () => {
-    currentProduct = button.dataset.product;
-    document.querySelectorAll(".product-switch button").forEach((item) => item.classList.remove("active"));
-    button.classList.add("active");
-    const masonry = currentProduct === "masonry";
-    document.querySelector("#fields-concrete").hidden = masonry;
-    document.querySelector("#fields-masonry").hidden = !masonry;
-    document.querySelector("#ticket-heading").textContent = masonry ? "Masonry ticket" : "Pour ticket";
-    document.querySelector("#ticket-sub").textContent = masonry
-      ? "Jobsite local time. TMS 602 / ACI 530.1 hot- and cold-weather masonry."
-      : "Jobsite local time. Defaults are a typical Type I slab.";
-    submitBtn.textContent = masonry ? "Check this lay-up" : "Check this pour";
+    selectProduct(button.dataset.product);
   });
 });
 
@@ -306,3 +416,5 @@ document.querySelectorAll("#outcome button").forEach((button) => {
     }
   });
 });
+
+selectProduct("concrete");

@@ -214,19 +214,27 @@ def pour_outcomes(body: PourOutcomeRequest) -> PourOutcomeResponse:
 
 @app.get("/")
 def index() -> FileResponse:
-    return FileResponse(FRONTEND / "index.html")
+    return FileResponse(FRONTEND / "index.html", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/terms")
 def terms() -> FileResponse:
-    return FileResponse(FRONTEND / "terms.html")
+    return FileResponse(FRONTEND / "terms.html", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/style.css")
 def stylesheet() -> FileResponse:
-    return FileResponse(FRONTEND / "style.css", media_type="text/css")
+    return FileResponse(
+        FRONTEND / "style.css",
+        media_type="text/css",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @app.get("/app.js")
 def javascript() -> FileResponse:
-    return FileResponse(FRONTEND / "app.js", media_type="application/javascript")
+    return FileResponse(
+        FRONTEND / "app.js",
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache"},
+    )

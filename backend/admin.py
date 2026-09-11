@@ -27,19 +27,23 @@ class CreateKeyBody(BaseModel):
 
 @router.get("/admin/login")
 def admin_login_page() -> FileResponse:
-    return FileResponse(FRONTEND / "login.html")
+    return FileResponse(FRONTEND / "login.html", headers={"Cache-Control": "no-cache"})
 
 
 @router.get("/admin")
 def admin_page(request: Request):
     if not request.session.get("admin"):
         return RedirectResponse("/admin/login", status_code=302)
-    return FileResponse(FRONTEND / "admin.html")
+    return FileResponse(FRONTEND / "admin.html", headers={"Cache-Control": "no-cache"})
 
 
 @router.get("/admin.js")
 def admin_js() -> FileResponse:
-    return FileResponse(FRONTEND / "admin.js", media_type="application/javascript")
+    return FileResponse(
+        FRONTEND / "admin.js",
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @router.post("/admin/api/login")

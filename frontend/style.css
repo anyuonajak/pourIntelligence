@@ -186,6 +186,50 @@ h1 {
   word-break: break-all;
 }
 
+.data-table tbody tr[data-id] {
+  cursor: pointer;
+}
+
+.data-table tr.selected {
+  background: var(--paper-2);
+}
+
+.workspace-note {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0 0 14px;
+}
+
+.admin-workspace {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(300px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.check-detail {
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  padding: 16px 18px 20px;
+  box-shadow: var(--shadow);
+  min-height: 280px;
+}
+
+.check-detail .stamp {
+  width: 112px;
+  min-height: 112px;
+}
+
+.check-detail .stamp-status {
+  font-size: 1.45rem;
+}
+
+.check-detail .result-meta h2 {
+  font-size: 1.35rem;
+  margin: 0;
+}
+
 .data-table button {
   font-family: "Barlow Condensed", sans-serif;
   text-transform: uppercase;
@@ -380,6 +424,7 @@ button#submit-btn:disabled {
   font-size: 0.7rem;
 }
 
+.stamp-status,
 #stamp-status {
   font-family: "Barlow Condensed", sans-serif;
   font-weight: 800;
@@ -579,7 +624,8 @@ button#submit-btn:disabled {
 
 @media (max-width: 860px) {
   .layout,
-  .row {
+  .row,
+  .admin-workspace {
     grid-template-columns: 1fr;
   }
 
