@@ -778,14 +778,31 @@ button#submit-btn:disabled {
   margin: 0;
 }
 
+.watch-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .watch-card {
+  display: grid;
+  gap: 6px;
   width: 100%;
   text-align: left;
   background: #fffdf8;
   border: 1px solid var(--rule);
   padding: 8px 10px;
+}
+
+.watch-card-open {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 0;
   cursor: pointer;
   font: inherit;
+  color: inherit;
 }
 
 .watch-card:hover,

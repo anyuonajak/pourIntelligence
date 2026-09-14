@@ -166,7 +166,10 @@
             <section id="watch" class="watch" hidden aria-live="polite">
               <div class="watch-head">
                 <p class="watch-kicker"><span class="watch-dot" id="watch-dot"></span><span id="watch-title">Watching this pour</span></p>
-                <button type="button" id="watch-toggle" class="text-btn">Pause</button>
+                <div class="watch-actions">
+                  <button type="button" id="watch-toggle" class="text-btn">Pause</button>
+                  <button type="button" id="watch-close" class="text-btn">Close</button>
+                </div>
               </div>
               <p class="watch-status" id="watch-status">Starting the watch…</p>
               <ol class="watch-log" id="watch-log"></ol>
@@ -203,6 +206,6 @@
         · Advisory only · Not a substitute for ACI 305R / 306R or the engineer of record
       </footer>
     </div>
-    <script src="/app.js?v=5"></script>
+    <script src="/app.js?v=6"></script>
   </body>
 </html>

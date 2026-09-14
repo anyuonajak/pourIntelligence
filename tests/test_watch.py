@@ -160,6 +160,16 @@ def test_watch_reports_a_status_flip_when_the_forecast_moves(stub_weather):
     assert payload["go_no_go_status"] == "NO_GO"
 
 
+def test_close_watch_without_database_is_ok(monkeypatch):
+    from uuid import uuid4
+
+    monkeypatch.setattr("backend.main.get_client", lambda: None)
+    client = TestClient(app)
+    response = client.post(f"/v1/pour-watch/{uuid4()}/close")
+    assert response.status_code == 200
+    assert response.json()["watching"] is False
+
+
 def test_freeze_line_crossing_is_material():
     changes = diff_forecast(
         previous_status="WARNING",

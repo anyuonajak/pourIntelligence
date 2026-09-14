@@ -305,6 +305,27 @@ def record_watch_poll(
     logger.error("record_watch_poll failed")
 
 
+def set_watching(check_id: UUID, watching: bool, event: dict[str, Any] | None = None) -> bool:
+    """Open or close a watch without re-running the forecast."""
+    client = get_client()
+    if client is None:
+        return False
+    stored = get_check_for_watch(check_id)
+    if stored is None:
+        return False
+    checked_at = datetime.now(timezone.utc).isoformat()
+    payload: dict[str, Any] = {"watching": watching, "last_checked_at": checked_at}
+    if event:
+        prior = stored.get("watch_events") if isinstance(stored.get("watch_events"), list) else []
+        payload["watch_events"] = [*prior, {**event, "at": checked_at}][-50:]
+    try:
+        client.table("pour_checks").update(payload).eq("id", str(check_id)).execute()
+        return True
+    except Exception:
+        logger.exception("set_watching failed")
+        return False
+
+
 def summarize_checks(rows: list[dict[str, Any]]) -> dict[str, Any]:
     total = len(rows)
     with_outcome = [row for row in rows if row.get("outcome")]

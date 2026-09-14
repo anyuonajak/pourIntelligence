@@ -203,6 +203,11 @@ function renderDetail(row) {
       row.source || "—"
     )} · ${escapeText(watchLine(row))}</p>
     <ol class="watch-log">${watchEvents(row)}</ol>
+    ${
+      row.watching
+        ? `<button type="button" class="text-btn" data-close-check="${escapeText(row.id)}">Close watch</button>`
+        : ""
+    }
   `;
   const metricsEl = detailEl.querySelector("dl.metrics");
   metricsEl.append(
@@ -322,6 +327,13 @@ checksBody.addEventListener("click", (event) => {
   if (!tr) return;
   selectedId = tr.dataset.id;
   renderCheckRows();
+});
+
+detailEl.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-close-check]");
+  if (!button) return;
+  await api(`/admin/api/checks/${button.dataset.closeCheck}/close`, { method: "POST" });
+  await loadChecks();
 });
 
 document.querySelectorAll("#product-filter button").forEach((button) => {

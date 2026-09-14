@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from .auth import require_admin, verify_admin
 from .config import get_settings
-from .db import create_api_key, list_api_keys, list_checks, revoke_api_key, summarize_checks
+from .db import create_api_key, list_api_keys, list_checks, revoke_api_key, set_watching, summarize_checks
 
 FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
 router = APIRouter()
@@ -77,6 +77,24 @@ def admin_checks(request: Request) -> dict[str, object]:
     require_admin(request)
     rows = list_checks()
     return {"checks": rows, "summary": summarize_checks(rows)}
+
+
+@router.post("/admin/api/checks/{check_id}/close")
+def admin_close_watch(request: Request, check_id: UUID) -> dict[str, object]:
+    require_admin(request)
+    if not set_watching(
+        check_id,
+        False,
+        {
+            "code": "WATCH_CLOSED",
+            "label": "Watch closed",
+            "detail": "Monitoring stopped from admin.",
+            "previous": "watching",
+            "current": "closed",
+        },
+    ):
+        raise HTTPException(status_code=404, detail="Unknown check.")
+    return {"ok": True, "watching": False}
 
 
 @router.get("/admin/api/keys")

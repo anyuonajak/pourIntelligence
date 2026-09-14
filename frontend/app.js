@@ -22,6 +22,7 @@ const watchTitle = document.querySelector("#watch-title");
 const watchStatusEl = document.querySelector("#watch-status");
 const watchLog = document.querySelector("#watch-log");
 const watchToggle = document.querySelector("#watch-toggle");
+const watchClose = document.querySelector("#watch-close");
 const watchListBody = document.querySelector("#watch-list-body");
 
 const NOGO_CODES = new Set([
@@ -76,7 +77,7 @@ function newWatch() {
     nextCheckSeconds: 180,
     watchUntil: null,
     request: null,
-    error: null,
+    closedByUser: false,
   };
 }
 
@@ -152,21 +153,25 @@ function renderWatchList() {
   watchListBody.innerHTML = "";
   rows.forEach((entry) => {
     const item = document.createElement("li");
-    const button = document.createElement("button");
+    const card = document.createElement("div");
     const state = watchEntryState(entry);
     const productLabel = entry.product === "masonry" ? "Masonry" : "Concrete";
     const stamp = entry.payload?.go_no_go_status || "—";
-    button.type = "button";
-    button.className = "watch-card";
-    if (entry.id === selectedWatchId) button.classList.add("selected");
-    if (entry.unread && entry.id !== selectedWatchId) button.classList.add("unread");
-    button.dataset.watchId = entry.id;
-    button.innerHTML = `<div class="watch-card-top">
-        <span class="watch-card-site">${entry.location || "Unknown site"}</span>
-        <span class="pill" data-status="${stamp}">${stamp.replace("_", "-")}</span>
-      </div>
-      <p class="watch-card-meta">${productLabel} · ${state} · ${entry.pourDateValue || "—"}</p>`;
-    item.append(button);
+    card.className = "watch-card";
+    if (entry.id === selectedWatchId) card.classList.add("selected");
+    if (entry.unread && entry.id !== selectedWatchId) card.classList.add("unread");
+    const closeControl =
+      state === "closed"
+        ? ""
+        : `<button type="button" class="text-btn" data-close-id="${entry.id}">Close</button>`;
+    card.innerHTML = `<button type="button" class="watch-card-open" data-watch-id="${entry.id}">
+        <div class="watch-card-top">
+          <span class="watch-card-site">${entry.location || "Unknown site"}</span>
+          <span class="pill" data-status="${stamp}">${stamp.replace("_", "-")}</span>
+        </div>
+        <p class="watch-card-meta">${productLabel} · ${state} · ${entry.pourDateValue || "—"}</p>
+      </button>${closeControl}`;
+    item.append(card);
     watchListBody.append(item);
   });
 }
@@ -478,6 +483,7 @@ function renderWatch(product) {
   }
   watchEl.hidden = false;
   watchToggle.hidden = !watch.open;
+  watchClose.hidden = !watch.open;
   watchToggle.textContent = watch.paused ? "Resume" : "Pause";
 
   let state = "watching";
@@ -488,7 +494,9 @@ function renderWatch(product) {
 
   if (!watch.open) {
     watchTitle.textContent = `Watch closed on this ${label}`;
-    watchStatusEl.textContent = `The protection window has passed. Last checked ${clockTime(watch.lastCheckedAt)}.`;
+    watchStatusEl.textContent = watch.closedByUser
+      ? `You closed this watch. Last checked ${clockTime(watch.lastCheckedAt)}.`
+      : `The protection window has passed. Last checked ${clockTime(watch.lastCheckedAt)}.`;
   } else if (watch.paused) {
     watchTitle.textContent = `Watch paused on this ${label}`;
     watchStatusEl.textContent = `Last checked ${clockTime(watch.lastCheckedAt)}. Resume to keep monitoring the forecast.`;
@@ -606,6 +614,30 @@ async function pollAllWatches() {
   scheduleWatch();
 }
 
+async function closeWatch(id) {
+  const entry = watchRoster.find((item) => item.id === id);
+  if (!entry || !entry.watch.open) return;
+  entry.watch.open = false;
+  entry.watch.paused = false;
+  entry.watch.closedByUser = true;
+  persistWatchRoster();
+  const checkId = entry.watch.request?.check_id || entry.id;
+  if (/^[0-9a-f-]{36}$/i.test(String(checkId))) {
+    try {
+      await fetch(`/v1/pour-watch/${checkId}/close`, { method: "POST" });
+    } catch {
+      /* local close still stands */
+    }
+  }
+  if (entry.id === selectedWatchId) {
+    renderWatch(entry.product);
+  }
+  watchListFilter = "closed";
+  persistWatchRoster();
+  renderWatchList();
+  scheduleWatch();
+}
+
 watchToggle.addEventListener("click", () => {
   const entry = watchRoster.find((item) => item.id === selectedWatchId);
   const watch = entry?.watch || watchByProduct[currentProduct];
@@ -620,6 +652,10 @@ watchToggle.addEventListener("click", () => {
   } else {
     pollAllWatches();
   }
+});
+
+watchClose.addEventListener("click", () => {
+  if (selectedWatchId) closeWatch(selectedWatchId);
 });
 
 document.addEventListener("visibilitychange", () => {
@@ -721,6 +757,12 @@ document.querySelectorAll("#watch-list-filter button").forEach((button) => {
 });
 
 watchListBody.addEventListener("click", (event) => {
+  const closeBtn = event.target.closest("[data-close-id]");
+  if (closeBtn) {
+    event.preventDefault();
+    closeWatch(closeBtn.dataset.closeId);
+    return;
+  }
   const button = event.target.closest("[data-watch-id]");
   if (!button) return;
   openWatch(button.dataset.watchId);

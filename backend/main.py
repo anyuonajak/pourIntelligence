@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Request
@@ -21,6 +21,7 @@ from .db import (
     insert_pour_outcome,
     lookup_api_key,
     record_watch_poll,
+    set_watching,
 )
 from .formulas import evaluate_pour
 from .formulas_masonry import evaluate_masonry
@@ -128,7 +129,7 @@ async def rate_limit_api(request: Request, call_next):
         if raw_key and api_key is None:
             return JSONResponse(status_code=401, content={"detail": "Invalid API key."})
         # Watch polls are cheap and repetitive, so they get their own quota.
-        watching = request.url.path == "/v1/pour-watch"
+        watching = request.url.path.startswith("/v1/pour-watch")
         if api_key:
             limit = int(api_key.get("rate_limit_per_hour") or settings.api_rate_limit_per_hour)
             bucket = f"key:{api_key['id']}"
@@ -256,6 +257,8 @@ async def pour_watch(request: Request, body: PourWatchRequest) -> PourWatchRespo
     watching = is_watch_open(body.pour_date, predictions, _jobsite_now(tz_name))
 
     stored = get_check_for_watch(body.check_id) if body.check_id else None
+    if stored is not None and stored.get("watching") is False:
+        watching = False
     if stored:
         previous_status = stored.get("go_no_go_status")
         previous_risks = stored.get("risk_factors") or []
@@ -318,6 +321,30 @@ async def pour_watch(request: Request, body: PourWatchRequest) -> PourWatchRespo
         location=LocationInfo(name=name, latitude=lat, longitude=lon, timezone=tz_name),
         hourly=result["hourly"],
     )
+
+
+@app.post("/v1/pour-watch/{check_id}/close")
+def close_watch(check_id: UUID) -> dict[str, object]:
+    """Stop monitoring a ticket. Does not delete the check or its stamp."""
+    if get_client() is None:
+        return {"ok": True, "watching": False}
+    stored = get_check_for_watch(check_id)
+    if stored is None:
+        raise HTTPException(status_code=404, detail="Unknown check_id.")
+    closed = set_watching(
+        check_id,
+        False,
+        {
+            "code": "WATCH_CLOSED",
+            "label": "Watch closed",
+            "detail": "Monitoring stopped. The stamp is unchanged.",
+            "previous": "watching",
+            "current": "closed",
+        },
+    )
+    if not closed:
+        raise HTTPException(status_code=503, detail="Could not close this watch.")
+    return {"ok": True, "watching": False}
 
 
 @app.post("/v1/pour-outcomes", response_model=PourOutcomeResponse)
