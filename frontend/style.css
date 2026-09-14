@@ -748,6 +748,87 @@ button#submit-btn:disabled {
   line-height: 1.45;
 }
 
+.watch-list {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+
+.watch-list-head h3 {
+  font-family: "Barlow Condensed", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.95rem;
+  margin: 0 0 4px;
+}
+
+.watch-list .presets {
+  margin: 8px 0 10px;
+}
+
+#watch-list-body {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+#watch-list-body li {
+  margin: 0;
+}
+
+.watch-card {
+  width: 100%;
+  text-align: left;
+  background: #fffdf8;
+  border: 1px solid var(--rule);
+  padding: 8px 10px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.watch-card:hover,
+.watch-card.selected {
+  border-color: var(--ink);
+}
+
+.watch-card.selected {
+  background: var(--paper-2);
+}
+
+.watch-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.watch-card-site {
+  font-weight: 600;
+}
+
+.watch-card-meta {
+  margin: 4px 0 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.watch-card.unread .watch-card-site::after {
+  content: " · updated";
+  color: var(--warn);
+  font-family: "Barlow Condensed", sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+
+.watch-list-empty {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
 @media (max-width: 860px) {
   .layout,
   .row,

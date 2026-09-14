@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/style.css?v=3" />
+    <link rel="stylesheet" href="/style.css?v=4" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   </head>
   <body>
@@ -130,6 +130,19 @@
               Results are advisory. <a href="/terms" target="_blank" rel="noopener noreferrer">Terms</a>
             </p>
           </form>
+
+          <section class="watch-list" aria-labelledby="watch-list-heading">
+            <div class="watch-list-head">
+              <h3 id="watch-list-heading">Watches</h3>
+              <div class="presets" id="watch-list-filter" role="group" aria-label="Watch status">
+                <button type="button" class="active" data-watch-filter="watching">Watching</button>
+                <button type="button" data-watch-filter="paused">Paused</button>
+                <button type="button" data-watch-filter="closed">Closed</button>
+                <button type="button" data-watch-filter="all">All</button>
+              </div>
+            </div>
+            <ul id="watch-list-body"></ul>
+          </section>
         </section>
 
         <section class="result" id="result" aria-live="polite">
@@ -190,6 +203,6 @@
         · Advisory only · Not a substitute for ACI 305R / 306R or the engineer of record
       </footer>
     </div>
-    <script src="/app.js?v=4"></script>
+    <script src="/app.js?v=5"></script>
   </body>
 </html>

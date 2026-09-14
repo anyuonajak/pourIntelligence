@@ -13,6 +13,7 @@ This is an advisory tool, not a substitute for project specifications or the eng
 - Simplified Nurse-Saul maturity for time-to-500-psi and 70% strength
 - A single-page demo UI served from the same app
 - `POST /v1/pour-watch` — re-checks a submitted ticket and reports only material forecast moves
+- Watch roster on the demo and in `/admin` (watching / paused / closed)
 - `POST /v1/pour-outcomes` — success / cracked / delayed / other, tied to a check
 - Supabase Postgres (checks, outcomes, weather cache, API keys)
 - Demo rate limit (30/hour/IP) and optional `X-API-Key` for vendors

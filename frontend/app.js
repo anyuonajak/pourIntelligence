@@ -22,6 +22,7 @@ const watchTitle = document.querySelector("#watch-title");
 const watchStatusEl = document.querySelector("#watch-status");
 const watchLog = document.querySelector("#watch-log");
 const watchToggle = document.querySelector("#watch-toggle");
+const watchListBody = document.querySelector("#watch-list-body");
 
 const NOGO_CODES = new Set([
   "EXTREME_EVAPORATION_RATE",
@@ -80,7 +81,113 @@ function newWatch() {
 }
 
 const watchByProduct = { concrete: newWatch(), masonry: newWatch() };
+const WATCH_STORE_KEY = "pi_watches_v1";
+const WATCH_STORE_MAX = 20;
+let watchRoster = [];
+let selectedWatchId = null;
+let watchListFilter = "watching";
 let watchTimer = null;
+
+function watchEntryState(entry) {
+  if (!entry?.watch?.open) return "closed";
+  if (entry.watch.paused) return "paused";
+  return "watching";
+}
+
+function loadWatchRoster() {
+  try {
+    const raw = localStorage.getItem(WATCH_STORE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    watchRoster = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    watchRoster = [];
+  }
+}
+
+function persistWatchRoster() {
+  try {
+    const slim = watchRoster.slice(0, WATCH_STORE_MAX).map((entry) => ({
+      ...entry,
+      payload: {
+        ...entry.payload,
+        hourly: entry.id === selectedWatchId ? entry.payload.hourly || [] : [],
+      },
+    }));
+    localStorage.setItem(WATCH_STORE_KEY, JSON.stringify(slim));
+  } catch {
+    /* quota or private mode */
+  }
+}
+
+function upsertWatchEntry({ id, product, location, pourDateValue, request, payload, watch, unread = false }) {
+  const next = { id, product, location, pourDateValue, request, payload, watch, unread };
+  watchRoster = [next, ...watchRoster.filter((entry) => entry.id !== id)].slice(0, WATCH_STORE_MAX);
+  persistWatchRoster();
+  renderWatchList();
+}
+
+function renderWatchList() {
+  const rows = watchRoster.filter((entry) => watchListFilter === "all" || watchEntryState(entry) === watchListFilter);
+  const counts = {
+    watching: watchRoster.filter((entry) => watchEntryState(entry) === "watching").length,
+    paused: watchRoster.filter((entry) => watchEntryState(entry) === "paused").length,
+    closed: watchRoster.filter((entry) => watchEntryState(entry) === "closed").length,
+  };
+  document.querySelectorAll("#watch-list-filter button").forEach((button) => {
+    const key = button.dataset.watchFilter;
+    if (key === "watching") button.textContent = `Watching · ${counts.watching}`;
+    else if (key === "paused") button.textContent = `Paused · ${counts.paused}`;
+    else if (key === "closed") button.textContent = `Closed · ${counts.closed}`;
+    else button.textContent = `All · ${watchRoster.length}`;
+    button.classList.toggle("active", key === watchListFilter);
+  });
+  if (!rows.length) {
+    const empty =
+      watchRoster.length === 0
+        ? "No watches yet. Submit a ticket to start one."
+        : `No ${watchListFilter} watches.`;
+    watchListBody.innerHTML = `<li class="watch-list-empty">${empty}</li>`;
+    return;
+  }
+  watchListBody.innerHTML = "";
+  rows.forEach((entry) => {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    const state = watchEntryState(entry);
+    const productLabel = entry.product === "masonry" ? "Masonry" : "Concrete";
+    const stamp = entry.payload?.go_no_go_status || "—";
+    button.type = "button";
+    button.className = "watch-card";
+    if (entry.id === selectedWatchId) button.classList.add("selected");
+    if (entry.unread && entry.id !== selectedWatchId) button.classList.add("unread");
+    button.dataset.watchId = entry.id;
+    button.innerHTML = `<div class="watch-card-top">
+        <span class="watch-card-site">${entry.location || "Unknown site"}</span>
+        <span class="pill" data-status="${stamp}">${stamp.replace("_", "-")}</span>
+      </div>
+      <p class="watch-card-meta">${productLabel} · ${state} · ${entry.pourDateValue || "—"}</p>`;
+    item.append(button);
+    watchListBody.append(item);
+  });
+}
+
+function openWatch(id) {
+  const entry = watchRoster.find((item) => item.id === id);
+  if (!entry) return;
+  stopWatchTimer();
+  selectedWatchId = id;
+  entry.unread = false;
+  persistWatchRoster();
+  currentProduct = entry.product;
+  applyProductChrome(entry.product);
+  showError("");
+  lastByProduct[entry.product] = { payload: entry.payload, pourDateValue: entry.pourDateValue };
+  watchByProduct[entry.product] = entry.watch;
+  paintResult(entry.payload, entry.pourDateValue);
+  renderWatch(entry.product);
+  renderWatchList();
+  scheduleWatch();
+}
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -179,13 +286,20 @@ function selectProduct(product) {
   currentProduct = product;
   applyProductChrome(product);
   showError("");
+  const entry = watchRoster.find((item) => item.product === product);
+  if (entry) {
+    openWatch(entry.id);
+    return;
+  }
   const cached = lastByProduct[product];
   if (cached) {
     paintResult(cached.payload, cached.pourDateValue);
     renderWatch(product);
-    scheduleWatch(product);
+    scheduleWatch();
   } else {
+    selectedWatchId = null;
     showEmptyState();
+    renderWatchList();
   }
 }
 
@@ -347,11 +461,12 @@ function stopWatchTimer() {
   }
 }
 
-function scheduleWatch(product) {
+function scheduleWatch() {
   stopWatchTimer();
-  const watch = watchByProduct[product];
-  if (!watch.open || watch.paused) return;
-  watchTimer = setTimeout(() => pollWatch(product), watch.nextCheckSeconds * 1000);
+  const open = watchRoster.filter((entry) => watchEntryState(entry) === "watching");
+  if (!open.length) return;
+  const wait = Math.min(...open.map((entry) => entry.watch.nextCheckSeconds || 180));
+  watchTimer = setTimeout(() => pollAllWatches(), wait * 1000);
 }
 
 function renderWatch(product) {
@@ -404,7 +519,7 @@ function renderWatch(product) {
   });
 }
 
-function startWatch(product, payload, requestBody) {
+function startWatch(product, payload, requestBody, pourDateValue) {
   const watch = newWatch();
   watch.open = Boolean(payload.watching);
   watch.watchUntil = payload.watch_until || null;
@@ -412,27 +527,35 @@ function startWatch(product, payload, requestBody) {
   watch.lastCheckedAt = new Date().toISOString();
   watch.request = { ...requestBody, check_id: payload.check_id || null };
   watchByProduct[product] = watch;
+  const id = String(payload.check_id || `local-${Date.now()}`);
+  selectedWatchId = id;
+  upsertWatchEntry({
+    id,
+    product,
+    location: payload.location?.name || requestBody.zip_code || "Unknown site",
+    pourDateValue,
+    request: watch.request,
+    payload,
+    watch,
+  });
   if (product === currentProduct) {
     renderWatch(product);
-    scheduleWatch(product);
+    scheduleWatch();
   }
 }
 
-async function pollWatch(product) {
-  const watch = watchByProduct[product];
+async function pollOneWatch(entry) {
+  const watch = entry.watch;
   if (!watch.open || watch.paused || watch.polling || !watch.request) return;
   watch.polling = true;
-
   const body = { ...watch.request };
-  const cached = lastByProduct[product];
-  if (!body.check_id && cached) {
+  if (!body.check_id && entry.payload) {
     body.baseline = {
-      go_no_go_status: cached.payload.go_no_go_status,
-      risk_factors: cached.payload.risk_factors,
-      metrics: cached.payload.metrics,
+      go_no_go_status: entry.payload.go_no_go_status,
+      risk_factors: entry.payload.risk_factors,
+      metrics: entry.payload.metrics,
     };
   }
-
   try {
     const response = await fetch("/v1/pour-watch", {
       method: "POST",
@@ -448,37 +571,54 @@ async function pollWatch(product) {
     watch.open = Boolean(payload.watching);
     watch.nextCheckSeconds = payload.next_check_seconds || watch.nextCheckSeconds;
     watch.watchUntil = payload.watch_until || watch.watchUntil;
-
     if (payload.changed) {
       const at = payload.checked_at;
       watch.events = [...payload.changes.map((change) => ({ ...change, at })), ...watch.events].slice(0, 20);
-      const pourDateValue = cached ? cached.pourDateValue : "";
-      cacheResult(product, { ...payload, check_id: body.check_id }, pourDateValue);
-      if (product === currentProduct) {
-        paintResult({ ...payload, check_id: body.check_id }, pourDateValue);
+      entry.payload = { ...payload, check_id: body.check_id };
+      entry.unread = entry.id !== selectedWatchId;
+      cacheResult(entry.product, entry.payload, entry.pourDateValue);
+      if (entry.id === selectedWatchId) {
+        paintResult(entry.payload, entry.pourDateValue);
         watchEl.classList.remove("flash");
         void watchEl.offsetWidth;
         watchEl.classList.add("flash");
+        renderWatch(entry.product);
       }
     }
   } catch (error) {
     watch.error = error.message || "network error";
   } finally {
     watch.polling = false;
-    if (product === currentProduct) renderWatch(product);
-    scheduleWatch(product);
   }
 }
 
+async function pollAllWatches() {
+  const open = watchRoster.filter((entry) => watchEntryState(entry) === "watching");
+  for (const entry of open) {
+    await pollOneWatch(entry);
+  }
+  persistWatchRoster();
+  renderWatchList();
+  const selected = watchRoster.find((entry) => entry.id === selectedWatchId);
+  if (selected && selected.product === currentProduct) {
+    renderWatch(selected.product);
+  }
+  scheduleWatch();
+}
+
 watchToggle.addEventListener("click", () => {
-  const watch = watchByProduct[currentProduct];
+  const entry = watchRoster.find((item) => item.id === selectedWatchId);
+  const watch = entry?.watch || watchByProduct[currentProduct];
   if (!watch.open) return;
   watch.paused = !watch.paused;
+  persistWatchRoster();
   renderWatch(currentProduct);
+  renderWatchList();
   if (watch.paused) {
     stopWatchTimer();
+    scheduleWatch();
   } else {
-    pollWatch(currentProduct);
+    pollAllWatches();
   }
 });
 
@@ -486,7 +626,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     stopWatchTimer();
   } else {
-    scheduleWatch(currentProduct);
+    scheduleWatch();
   }
 });
 
@@ -539,7 +679,7 @@ async function checkPour(event) {
     if (currentProduct === product) {
       paintResult(payload, pourDate);
     }
-    startWatch(product, payload, body);
+    startWatch(product, payload, body, pourDate);
   } catch (error) {
     if (currentProduct === product) {
       showError(error.message || copy.error);
@@ -573,6 +713,19 @@ document.querySelectorAll(".product-switch button").forEach((button) => {
   });
 });
 
+document.querySelectorAll("#watch-list-filter button").forEach((button) => {
+  button.addEventListener("click", () => {
+    watchListFilter = button.dataset.watchFilter;
+    renderWatchList();
+  });
+});
+
+watchListBody.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-watch-id]");
+  if (!button) return;
+  openWatch(button.dataset.watchId);
+});
+
 document.querySelectorAll("#outcome button").forEach((button) => {
   button.addEventListener("click", async () => {
     if (!currentCheckId) return;
@@ -601,4 +754,6 @@ document.querySelectorAll("#outcome button").forEach((button) => {
   });
 });
 
+loadWatchRoster();
+renderWatchList();
 selectProduct("concrete");

@@ -52,10 +52,19 @@ async function api(path, options = {}) {
 
 let allChecks = [];
 let productFilter = "concrete";
+let watchFilter = "watching";
 let selectedId = null;
 
+function watchState(row) {
+  return row.watching ? "watching" : "closed";
+}
+
 function filteredChecks() {
-  return allChecks.filter((row) => (row.product || "concrete") === productFilter);
+  return allChecks.filter((row) => {
+    if ((row.product || "concrete") !== productFilter) return false;
+    if (watchFilter === "all") return true;
+    return watchState(row) === watchFilter;
+  });
 }
 
 function mixLine(row) {
@@ -142,6 +151,7 @@ function renderSummary(rows) {
     metric("Warning", summary.warning),
     metric("No-go", summary.nogo),
     metric("Watching", summary.watching),
+    metric("Closed", summary.total - summary.watching),
     metric("With outcome", summary.withOutcome),
     metric("Pending", summary.pending),
     metric("GO + success", summary.goSuccess),
@@ -214,7 +224,11 @@ function renderCheckRows() {
   checksBody.innerHTML = "";
   if (!rows.length) {
     selectedId = null;
-    checksBody.innerHTML = '<tr><td colspan="5">No checks for this product yet.</td></tr>';
+    const empty =
+      watchFilter === "all"
+        ? "No checks for this product yet."
+        : `No ${watchFilter} watches for this product.`;
+    checksBody.innerHTML = `<tr><td colspan="6">${empty}</td></tr>`;
     renderDetail(null);
     return;
   }
@@ -226,8 +240,10 @@ function renderCheckRows() {
     const outcome = row.outcome || "pending";
     tr.dataset.id = row.id;
     if (row.id === selectedId) tr.classList.add("selected");
+    const watch = watchState(row);
     tr.innerHTML = `<td>${escapeText(fmt(row.created_at))}</td>
       <td>${escapeText(row.location_name || row.zip_code || "—")}</td>
+      <td><span class="pill" data-outcome="${watch === "watching" ? "pending" : "success"}">${watch}</span></td>
       <td><span class="pill" data-status="${escapeText(row.go_no_go_status)}">${escapeText(
       row.go_no_go_status
     )}</span></td>
@@ -318,7 +334,17 @@ document.querySelectorAll("#product-filter button").forEach((button) => {
   });
 });
 
+document.querySelectorAll("#watch-filter button").forEach((button) => {
+  button.addEventListener("click", () => {
+    watchFilter = button.dataset.watch;
+    selectedId = null;
+    document.querySelectorAll("#watch-filter button").forEach((item) => item.classList.remove("active"));
+    button.classList.add("active");
+    renderCheckRows();
+  });
+});
+
 loadChecks().catch((error) => {
-  checksBody.innerHTML = `<tr><td colspan="5">${escapeText(error.message)}</td></tr>`;
+  checksBody.innerHTML = `<tr><td colspan="6">${escapeText(error.message)}</td></tr>`;
 });
 loadKeys().catch(() => {});

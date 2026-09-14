@@ -100,4 +100,5 @@ def test_demo_js_isolates_products():
     assert "lastByProduct" in js.text
     assert "selectProduct" in js.text
     assert "pour-watch" in js.text
+    assert "watchRoster" in js.text
     assert js.headers.get("cache-control") == "no-cache"
