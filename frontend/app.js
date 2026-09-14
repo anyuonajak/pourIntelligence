@@ -17,6 +17,11 @@ const disclaimerEl = document.querySelector("#disclaimer");
 const outcomeEl = document.querySelector("#outcome");
 const outcomeStatus = document.querySelector("#outcome-status");
 const presetButtons = document.querySelectorAll(".presets button");
+const watchEl = document.querySelector("#watch");
+const watchTitle = document.querySelector("#watch-title");
+const watchStatusEl = document.querySelector("#watch-status");
+const watchLog = document.querySelector("#watch-log");
+const watchToggle = document.querySelector("#watch-toggle");
 
 const NOGO_CODES = new Set([
   "EXTREME_EVAPORATION_RATE",
@@ -32,7 +37,7 @@ const COPY = {
     submit: "Check this pour",
     emptyKicker: "Waiting on a concrete ticket",
     emptyBody:
-      "Fill the concrete slab ticket and run a check. You’ll get an ACI 305R / 306R stamp, risk factors, a 48-hour forecast chart, and a mitigation note.",
+      "Fill the concrete slab ticket and run a check. We stamp it, then keep watching the forecast and restamp if weather moves enough to change the call.",
     dateLabel: "Pour date & time",
     outcomeKicker: "How did this pour go?",
     chartTitle: "Pour window · 48 hours",
@@ -45,7 +50,7 @@ const COPY = {
     submit: "Check this lay-up",
     emptyKicker: "Waiting on a masonry ticket",
     emptyBody:
-      "Fill the masonry ticket and run a check. You’ll get a TMS 602 stamp, risk factors, a 48-hour forecast chart, and a protection note.",
+      "Fill the masonry ticket and run a check. We stamp it, then keep watching the forecast and restamp if weather moves enough to change the call.",
     dateLabel: "Lay-up date & time",
     outcomeKicker: "How did this lay-up go?",
     chartTitle: "Lay-up window · 48 hours",
@@ -59,6 +64,23 @@ let currentCheckId = null;
 let currentProduct = "concrete";
 let inFlightProduct = null;
 const lastByProduct = { concrete: null, masonry: null };
+
+function newWatch() {
+  return {
+    open: false,
+    paused: false,
+    polling: false,
+    events: [],
+    lastCheckedAt: null,
+    nextCheckSeconds: 180,
+    watchUntil: null,
+    request: null,
+    error: null,
+  };
+}
+
+const watchByProduct = { concrete: newWatch(), masonry: newWatch() };
+let watchTimer = null;
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -115,6 +137,8 @@ function clearResultPanel() {
   outcomeStatus.hidden = true;
   outcomeStatus.textContent = "";
   outcomeEl.hidden = true;
+  watchEl.hidden = true;
+  watchLog.innerHTML = "";
   destroyChart();
 }
 
@@ -151,12 +175,15 @@ function applyProductChrome(product) {
 }
 
 function selectProduct(product) {
+  stopWatchTimer();
   currentProduct = product;
   applyProductChrome(product);
   showError("");
   const cached = lastByProduct[product];
   if (cached) {
     paintResult(cached.payload, cached.pourDateValue);
+    renderWatch(product);
+    scheduleWatch(product);
   } else {
     showEmptyState();
   }
@@ -307,6 +334,162 @@ function cacheResult(product, payload, pourDateValue) {
   lastByProduct[product] = { payload, pourDateValue };
 }
 
+function clockTime(value) {
+  const when = value ? new Date(value) : new Date();
+  if (Number.isNaN(when.getTime())) return "—";
+  return when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function stopWatchTimer() {
+  if (watchTimer) {
+    clearTimeout(watchTimer);
+    watchTimer = null;
+  }
+}
+
+function scheduleWatch(product) {
+  stopWatchTimer();
+  const watch = watchByProduct[product];
+  if (!watch.open || watch.paused) return;
+  watchTimer = setTimeout(() => pollWatch(product), watch.nextCheckSeconds * 1000);
+}
+
+function renderWatch(product) {
+  const watch = watchByProduct[product];
+  const label = product === "masonry" ? "lay-up" : "pour";
+  if (!watch.request) {
+    watchEl.hidden = true;
+    return;
+  }
+  watchEl.hidden = false;
+  watchToggle.hidden = !watch.open;
+  watchToggle.textContent = watch.paused ? "Resume" : "Pause";
+
+  let state = "watching";
+  if (!watch.open) state = "closed";
+  else if (watch.paused) state = "paused";
+  else if (watch.error) state = "error";
+  watchEl.dataset.state = state;
+
+  if (!watch.open) {
+    watchTitle.textContent = `Watch closed on this ${label}`;
+    watchStatusEl.textContent = `The protection window has passed. Last checked ${clockTime(watch.lastCheckedAt)}.`;
+  } else if (watch.paused) {
+    watchTitle.textContent = `Watch paused on this ${label}`;
+    watchStatusEl.textContent = `Last checked ${clockTime(watch.lastCheckedAt)}. Resume to keep monitoring the forecast.`;
+  } else if (watch.error) {
+    watchTitle.textContent = `Watching this ${label}`;
+    watchStatusEl.textContent = `Could not reach the forecast (${watch.error}). Retrying.`;
+  } else if (!watch.lastCheckedAt) {
+    watchTitle.textContent = `Watching this ${label}`;
+    watchStatusEl.textContent = "Starting the watch…";
+  } else {
+    watchTitle.textContent = `Watching this ${label}`;
+    const tail = watch.events.length
+      ? `${watch.events.length} update${watch.events.length === 1 ? "" : "s"} so far`
+      : "no material change";
+    watchStatusEl.textContent = `Last checked ${clockTime(watch.lastCheckedAt)} · ${tail}`;
+  }
+
+  watchLog.innerHTML = "";
+  watch.events.forEach((event) => {
+    const item = document.createElement("li");
+    if (event.code === "STATUS") item.dataset.severity = "status";
+    item.innerHTML = `<strong>${event.label}</strong>${event.detail}`;
+    const time = document.createElement("span");
+    time.className = "watch-time";
+    time.textContent = clockTime(event.at);
+    item.append(time);
+    watchLog.append(item);
+  });
+}
+
+function startWatch(product, payload, requestBody) {
+  const watch = newWatch();
+  watch.open = Boolean(payload.watching);
+  watch.watchUntil = payload.watch_until || null;
+  watch.nextCheckSeconds = payload.next_check_seconds || 180;
+  watch.lastCheckedAt = new Date().toISOString();
+  watch.request = { ...requestBody, check_id: payload.check_id || null };
+  watchByProduct[product] = watch;
+  if (product === currentProduct) {
+    renderWatch(product);
+    scheduleWatch(product);
+  }
+}
+
+async function pollWatch(product) {
+  const watch = watchByProduct[product];
+  if (!watch.open || watch.paused || watch.polling || !watch.request) return;
+  watch.polling = true;
+
+  const body = { ...watch.request };
+  const cached = lastByProduct[product];
+  if (!body.check_id && cached) {
+    body.baseline = {
+      go_no_go_status: cached.payload.go_no_go_status,
+      risk_factors: cached.payload.risk_factors,
+      metrics: cached.payload.metrics,
+    };
+  }
+
+  try {
+    const response = await fetch("/v1/pour-watch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.detail || response.statusText);
+    }
+    watch.error = null;
+    watch.lastCheckedAt = payload.checked_at;
+    watch.open = Boolean(payload.watching);
+    watch.nextCheckSeconds = payload.next_check_seconds || watch.nextCheckSeconds;
+    watch.watchUntil = payload.watch_until || watch.watchUntil;
+
+    if (payload.changed) {
+      const at = payload.checked_at;
+      watch.events = [...payload.changes.map((change) => ({ ...change, at })), ...watch.events].slice(0, 20);
+      const pourDateValue = cached ? cached.pourDateValue : "";
+      cacheResult(product, { ...payload, check_id: body.check_id }, pourDateValue);
+      if (product === currentProduct) {
+        paintResult({ ...payload, check_id: body.check_id }, pourDateValue);
+        watchEl.classList.remove("flash");
+        void watchEl.offsetWidth;
+        watchEl.classList.add("flash");
+      }
+    }
+  } catch (error) {
+    watch.error = error.message || "network error";
+  } finally {
+    watch.polling = false;
+    if (product === currentProduct) renderWatch(product);
+    scheduleWatch(product);
+  }
+}
+
+watchToggle.addEventListener("click", () => {
+  const watch = watchByProduct[currentProduct];
+  if (!watch.open) return;
+  watch.paused = !watch.paused;
+  renderWatch(currentProduct);
+  if (watch.paused) {
+    stopWatchTimer();
+  } else {
+    pollWatch(currentProduct);
+  }
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    stopWatchTimer();
+  } else {
+    scheduleWatch(currentProduct);
+  }
+});
+
 async function checkPour(event) {
   event.preventDefault();
   const product = currentProduct;
@@ -356,6 +539,7 @@ async function checkPour(event) {
     if (currentProduct === product) {
       paintResult(payload, pourDate);
     }
+    startWatch(product, payload, body);
   } catch (error) {
     if (currentProduct === product) {
       showError(error.message || copy.error);

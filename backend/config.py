@@ -29,7 +29,10 @@ class Settings:
     environment: str
     demo_rate_limit_per_hour: int
     api_rate_limit_per_hour: int
+    watch_rate_limit_per_hour: int
+    watch_poll_seconds: int
     weather_cache_minutes: int
+    watch_weather_cache_minutes: int
     admin_username: str
     admin_password: str | None
     session_secret: str
@@ -55,7 +58,10 @@ def get_settings() -> Settings:
         environment=_first("ENVIRONMENT", "APP_ENV") or "production",
         demo_rate_limit_per_hour=int(_first("DEMO_RATE_LIMIT_PER_HOUR") or "30"),
         api_rate_limit_per_hour=int(_first("API_RATE_LIMIT_PER_HOUR") or "300"),
+        watch_rate_limit_per_hour=int(_first("WATCH_RATE_LIMIT_PER_HOUR") or "240"),
+        watch_poll_seconds=int(_first("WATCH_POLL_SECONDS") or "180"),
         weather_cache_minutes=int(_first("WEATHER_CACHE_MINUTES") or "45"),
+        watch_weather_cache_minutes=int(_first("WATCH_WEATHER_CACHE_MINUTES") or "10"),
         admin_username=_first("ADMIN_USERNAME") or "admin",
         admin_password=_first("ADMIN_PASSWORD"),
         session_secret=session_secret,

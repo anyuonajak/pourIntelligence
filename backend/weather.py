@@ -103,7 +103,12 @@ def _parse_hourly(payload: dict) -> tuple[list[WeatherHour], str | None]:
     return hours, tz_name
 
 
-async def fetch_hourly(latitude: float, longitude: float, pour_date: datetime) -> tuple[list[WeatherHour], str | None]:
+async def fetch_hourly(
+    latitude: float,
+    longitude: float,
+    pour_date: datetime,
+    cache_ttl_minutes: int | None = None,
+) -> tuple[list[WeatherHour], str | None]:
     pour_day = pour_date.date()
     today = date.today()
     too_far = today + timedelta(days=15)
@@ -137,7 +142,7 @@ async def fetch_hourly(latitude: float, longitude: float, pour_date: datetime) -
     settings = get_settings()
     mode = "archive" if use_archive else "forecast"
     key = cache_key_for_weather(latitude, longitude, pour_day.isoformat(), mode)
-    cached = get_weather_cache(key)
+    cached = get_weather_cache(key, max_age_minutes=cache_ttl_minutes)
     if cached:
         hours, tz_name = _parse_hourly(cached)
         if hours:
@@ -155,7 +160,8 @@ async def fetch_hourly(latitude: float, longitude: float, pour_date: datetime) -
         raise HTTPException(status_code=502, detail=f"Weather service error: {exc}") from exc
 
     if hours:
-        set_weather_cache(key, payload, settings.weather_cache_minutes)
+        ttl = cache_ttl_minutes if cache_ttl_minutes is not None else settings.weather_cache_minutes
+        set_weather_cache(key, payload, ttl)
 
     if not hours:
         raise HTTPException(status_code=502, detail="Weather service returned no hourly data.")

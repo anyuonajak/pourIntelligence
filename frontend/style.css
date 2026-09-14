@@ -484,6 +484,132 @@ button#submit-btn:disabled {
   border-color: var(--nogo);
 }
 
+.watch {
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--go);
+  background: #fffdf8;
+  padding: 10px 12px;
+  margin: 0 0 16px;
+}
+
+.watch[data-state="paused"],
+.watch[data-state="error"] {
+  border-left-color: var(--warn);
+}
+
+.watch[data-state="closed"] {
+  border-left-color: var(--rule);
+}
+
+.watch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.watch-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "Barlow Condensed", sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin: 0;
+}
+
+.watch-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--go);
+  flex-shrink: 0;
+}
+
+.watch[data-state="watching"] .watch-dot {
+  animation: watch-pulse 2.4s ease-in-out infinite;
+}
+
+.watch[data-state="paused"] .watch-dot,
+.watch[data-state="error"] .watch-dot {
+  background: var(--warn);
+}
+
+.watch[data-state="closed"] .watch-dot {
+  background: var(--muted);
+}
+
+@keyframes watch-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .watch[data-state="watching"] .watch-dot {
+    animation: none;
+  }
+}
+
+.watch-status {
+  margin: 6px 0 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.watch-log {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.watch-log li {
+  border-left: 3px solid var(--warn);
+  background: var(--paper-2);
+  padding: 6px 9px;
+  font-size: 0.92rem;
+}
+
+.watch-log li[data-severity="status"] {
+  border-left-color: var(--nogo);
+}
+
+.watch-log li strong {
+  font-family: "Barlow Condensed", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  display: block;
+}
+
+.watch-time {
+  display: block;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.watch.flash {
+  animation: watch-flash 1.1s ease-out 2;
+}
+
+@keyframes watch-flash {
+  0% {
+    background: var(--warn-wash);
+  }
+  100% {
+    background: #fffdf8;
+  }
+}
+
 .metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

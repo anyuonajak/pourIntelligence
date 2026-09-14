@@ -112,14 +112,60 @@ class HourlyPoint(BaseModel):
 
 DISCLAIMER = (
     "Advisory only. This is not a substitute for ACI 305R/306R, TMS 602 / ACI 530.1, "
-    "project specifications, or the engineer of record. Weather forecasts change; re-check on pour day."
+    "project specifications, or the engineer of record. After you submit a ticket we keep "
+    "watching the forecast and will update the stamp if weather moves enough to change the call."
 )
+
+
+class WatchChange(BaseModel):
+    code: str
+    label: str
+    detail: str
+    previous: str = ""
+    current: str = ""
 
 
 class PourReadinessResponse(BaseModel):
     api_version: str = "v1"
     product: ProductType = ProductType.CONCRETE
     check_id: Optional[UUID] = None
+    go_no_go_status: GoNoGoStatus
+    risk_factors: list[str]
+    risk_factor_details: list[RiskFactorDetail]
+    metrics: Metrics
+    predictions: Predictions
+    recommended_mitigation: str
+    location: LocationInfo
+    hourly: list[HourlyPoint]
+    watching: bool = False
+    watch_until: Optional[str] = None
+    next_check_seconds: Optional[int] = None
+    disclaimer: str = DISCLAIMER
+
+
+class WatchBaseline(BaseModel):
+    """What the caller was last told, so we only report real movement."""
+
+    go_no_go_status: Optional[GoNoGoStatus] = None
+    risk_factors: list[str] = Field(default_factory=list)
+    metrics: Optional[Metrics] = None
+
+
+class PourWatchRequest(PourReadinessRequest):
+    check_id: Optional[UUID] = None
+    baseline: Optional[WatchBaseline] = None
+
+
+class PourWatchResponse(BaseModel):
+    api_version: str = "v1"
+    product: ProductType = ProductType.CONCRETE
+    check_id: Optional[UUID] = None
+    watching: bool
+    watch_until: Optional[str] = None
+    checked_at: str
+    next_check_seconds: int
+    changed: bool
+    changes: list[WatchChange]
     go_no_go_status: GoNoGoStatus
     risk_factors: list[str]
     risk_factor_details: list[RiskFactorDetail]

@@ -1,3 +1,5 @@
+import re
+
 from fastapi.testclient import TestClient
 
 from backend.auth import verify_admin
@@ -85,11 +87,11 @@ def test_serialize_check_defaults_product_from_mix():
 def test_demo_assets_are_cache_busted():
     client = TestClient(app)
     page = client.get("/")
-    assert 'href="/style.css?v=2"' in page.text
-    assert 'src="/app.js?v=3"' in page.text
+    assert re.search(r'href="/style\.css\?v=\d+"', page.text)
+    assert re.search(r'src="/app\.js\?v=\d+"', page.text)
     assert 'id="empty-kicker"' in page.text
     admin = client.get("/admin/login")
-    assert 'href="/style.css?v=2"' in admin.text
+    assert re.search(r'href="/style\.css\?v=\d+"', admin.text)
 
 
 def test_demo_js_isolates_products():
@@ -97,4 +99,5 @@ def test_demo_js_isolates_products():
     js = client.get("/app.js")
     assert "lastByProduct" in js.text
     assert "selectProduct" in js.text
+    assert "pour-watch" in js.text
     assert js.headers.get("cache-control") == "no-cache"

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +13,15 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .admin import router as admin_router
 from .config import get_settings
-from .db import check_exists, get_client, insert_pour_check, insert_pour_outcome, lookup_api_key
+from .db import (
+    check_exists,
+    get_check_for_watch,
+    get_client,
+    insert_pour_check,
+    insert_pour_outcome,
+    lookup_api_key,
+    record_watch_poll,
+)
 from .formulas import evaluate_pour
 from .formulas_masonry import evaluate_masonry
 from .rate_limit import limiter
@@ -21,8 +31,11 @@ from .schemas import (
     PourOutcomeResponse,
     PourReadinessRequest,
     PourReadinessResponse,
+    PourWatchRequest,
+    PourWatchResponse,
     ProductType,
 )
+from .watch import diff_forecast, is_watch_open, watch_until
 from .weather import fetch_hourly, resolve_location
 
 logging.basicConfig(
@@ -39,8 +52,8 @@ app = FastAPI(
     title="Pour Intelligence",
     version="0.1.0",
     description=(
-        "Go / no-go pour-readiness for concrete and masonry from public weather "
-        "forecasts and ACI 305R / 306R guidance. Advisory only. "
+        "Go / no-go pour-readiness for concrete and masonry, then a live watch "
+        "that restamps only on material forecast changes. Advisory only. "
         "Public demo is rate-limited. Vendor callers should send X-API-Key."
     ),
 )
@@ -66,6 +79,38 @@ def _request_id(request: Request) -> str:
     return getattr(request.state, "request_id", "-")
 
 
+def _jobsite_now(tz_name: str | None) -> datetime:
+    """Jobsite-local wall clock, to compare against a naive pour_date."""
+    if tz_name:
+        try:
+            return datetime.now(ZoneInfo(tz_name)).replace(tzinfo=None)
+        except Exception:
+            logger.warning("unknown timezone %s; falling back to UTC", tz_name)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+async def _evaluate(body: PourReadinessRequest, lat: float, lon: float, cache_ttl_minutes: int | None = None):
+    hourly, tz_name = await fetch_hourly(lat, lon, body.pour_date, cache_ttl_minutes=cache_ttl_minutes)
+    try:
+        if body.product == ProductType.MASONRY:
+            result = evaluate_masonry(
+                pour_time=body.pour_date,
+                hourly=hourly,
+                design=body.masonry_design,
+                mortar_temp_f=body.concrete_temp_f,
+            )
+        else:
+            result = evaluate_pour(
+                pour_time=body.pour_date,
+                hourly=hourly,
+                mix=body.mix_design,
+                concrete_temp_f=body.concrete_temp_f,
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return result, tz_name
+
+
 @app.middleware("http")
 async def add_request_id(request: Request, call_next):
     request_id = request.headers.get("x-request-id") or str(uuid4())
@@ -82,12 +127,16 @@ async def rate_limit_api(request: Request, call_next):
         api_key = lookup_api_key(raw_key) if raw_key else None
         if raw_key and api_key is None:
             return JSONResponse(status_code=401, content={"detail": "Invalid API key."})
+        # Watch polls are cheap and repetitive, so they get their own quota.
+        watching = request.url.path == "/v1/pour-watch"
         if api_key:
             limit = int(api_key.get("rate_limit_per_hour") or settings.api_rate_limit_per_hour)
             bucket = f"key:{api_key['id']}"
         else:
-            limit = settings.demo_rate_limit_per_hour
+            limit = settings.watch_rate_limit_per_hour if watching else settings.demo_rate_limit_per_hour
             bucket = f"ip:{_client_ip(request)}"
+        if watching:
+            bucket = f"watch:{bucket}"
         allowed, retry_after = limiter.allow(bucket, limit)
         if not allowed:
             return JSONResponse(
@@ -120,24 +169,10 @@ async def pour_readiness(request: Request, body: PourReadinessRequest) -> PourRe
         body.zip_code,
         body.address,
     )
-    hourly, tz_name = await fetch_hourly(lat, lon, body.pour_date)
-    try:
-        if body.product == ProductType.MASONRY:
-            result = evaluate_masonry(
-                pour_time=body.pour_date,
-                hourly=hourly,
-                design=body.masonry_design,
-                mortar_temp_f=body.concrete_temp_f,
-            )
-        else:
-            result = evaluate_pour(
-                pour_time=body.pour_date,
-                hourly=hourly,
-                mix=body.mix_design,
-                concrete_temp_f=body.concrete_temp_f,
-            )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    result, tz_name = await _evaluate(body, lat, lon)
+
+    predictions = result["predictions"].model_dump(mode="json")
+    watching = is_watch_open(body.pour_date, predictions, _jobsite_now(tz_name))
 
     api_key = getattr(request.state, "api_key", None)
     referer = request.headers.get("referer") or ""
@@ -166,9 +201,11 @@ async def pour_readiness(request: Request, body: PourReadinessRequest) -> PourRe
             "go_no_go_status": result["go_no_go_status"].value,
             "risk_factors": result["risk_factors"],
             "metrics": result["metrics"].model_dump(mode="json"),
-            "predictions": result["predictions"].model_dump(mode="json"),
+            "predictions": predictions,
             "recommended_mitigation": result["recommended_mitigation"],
             "location": {"name": name, "latitude": lat, "longitude": lon, "timezone": tz_name},
+            "watching": watching,
+            "last_checked_at": datetime.now(timezone.utc).isoformat(),
         }
     )
 
@@ -194,6 +231,91 @@ async def pour_readiness(request: Request, body: PourReadinessRequest) -> PourRe
             longitude=lon,
             timezone=tz_name,
         ),
+        hourly=result["hourly"],
+        watching=watching,
+        watch_until=watch_until(body.pour_date, predictions).isoformat(),
+        next_check_seconds=settings.watch_poll_seconds,
+    )
+
+
+@app.post("/v1/pour-watch", response_model=PourWatchResponse)
+async def pour_watch(request: Request, body: PourWatchRequest) -> PourWatchResponse:
+    """Re-run a submitted ticket and report only forecast moves big enough to matter."""
+    lat, lon, name = await resolve_location(
+        body.latitude,
+        body.longitude,
+        body.zip_code,
+        body.address,
+    )
+    result, tz_name = await _evaluate(body, lat, lon, cache_ttl_minutes=settings.watch_weather_cache_minutes)
+
+    status = result["go_no_go_status"].value
+    risk_factors = result["risk_factors"]
+    metrics = result["metrics"].model_dump(mode="json")
+    predictions = result["predictions"].model_dump(mode="json")
+    watching = is_watch_open(body.pour_date, predictions, _jobsite_now(tz_name))
+
+    stored = get_check_for_watch(body.check_id) if body.check_id else None
+    if stored:
+        previous_status = stored.get("go_no_go_status")
+        previous_risks = stored.get("risk_factors") or []
+        previous_metrics = stored.get("metrics") or {}
+        prior_events = stored.get("watch_events") or []
+    elif body.baseline:
+        previous_status = body.baseline.go_no_go_status.value if body.baseline.go_no_go_status else None
+        previous_risks = body.baseline.risk_factors
+        previous_metrics = body.baseline.metrics.model_dump(mode="json") if body.baseline.metrics else {}
+        prior_events = []
+    else:
+        previous_status, previous_risks, previous_metrics, prior_events = None, [], {}, []
+
+    changes = diff_forecast(
+        previous_status=previous_status,
+        previous_risks=previous_risks,
+        previous_metrics=previous_metrics,
+        status=status,
+        risks=risk_factors,
+        metrics=metrics,
+    )
+
+    if body.check_id and stored is not None:
+        record_watch_poll(
+            body.check_id,
+            status=status,
+            risk_factors=risk_factors,
+            metrics=metrics,
+            predictions=predictions,
+            recommended_mitigation=result["recommended_mitigation"],
+            new_events=changes,
+            prior_events=prior_events,
+            watching=watching,
+        )
+
+    if changes:
+        logger.info(
+            "pour_watch request_id=%s check_id=%s status=%s changes=%d",
+            _request_id(request),
+            body.check_id,
+            status,
+            len(changes),
+        )
+
+    return PourWatchResponse(
+        product=body.product,
+        check_id=body.check_id,
+        watching=watching,
+        watch_until=watch_until(body.pour_date, predictions).isoformat(),
+        checked_at=datetime.now(timezone.utc).isoformat(),
+        next_check_seconds=settings.watch_poll_seconds,
+        changed=bool(changes),
+        changes=changes,
+        go_no_go_status=result["go_no_go_status"],
+        risk_factors=risk_factors,
+        risk_factor_details=result["risk_factor_details"],
+        metrics=result["metrics"],
+        predictions=result["predictions"],
+        recommended_mitigation=result["recommended_mitigation"],
+        location=LocationInfo(name=name, latitude=lat, longitude=lon, timezone=tz_name),
         hourly=result["hourly"],
     )
 

@@ -57,20 +57,23 @@ def cache_key_for_weather(latitude: float, longitude: float, pour_day: str, mode
     return f"{round(latitude, 2)}:{round(longitude, 2)}:{pour_day}:{mode}"
 
 
-def get_weather_cache(key: str) -> Optional[dict[str, Any]]:
+def get_weather_cache(key: str, max_age_minutes: Optional[int] = None) -> Optional[dict[str, Any]]:
     client = get_client()
     if client is None:
         return None
     try:
-        now = datetime.now(timezone.utc).isoformat()
-        result = (
+        now = datetime.now(timezone.utc)
+        query = (
             client.table("weather_cache")
-            .select("payload")
+            .select("payload,fetched_at")
             .eq("cache_key", key)
-            .gt("expires_at", now)
-            .limit(1)
-            .execute()
+            .gt("expires_at", now.isoformat())
         )
+        if max_age_minutes is not None:
+            # A watch needs fresher data than a one-off check, even on a warm cache entry.
+            cutoff = now - timedelta(minutes=max_age_minutes)
+            query = query.gt("fetched_at", cutoff.isoformat())
+        result = query.limit(1).execute()
         rows = result.data or []
         if not rows:
             return None
@@ -108,8 +111,13 @@ def insert_pour_check(row: dict[str, Any]) -> Optional[UUID]:
         try:
             client.table("pour_checks").insert(payload).execute()
         except Exception:
-            payload.pop("product", None)
-            client.table("pour_checks").insert(payload).execute()
+            payload.pop("watching", None)
+            payload.pop("last_checked_at", None)
+            try:
+                client.table("pour_checks").insert(payload).execute()
+            except Exception:
+                payload.pop("product", None)
+                client.table("pour_checks").insert(payload).execute()
         return UUID(str(check_id))
     except Exception:
         logger.exception("pour_check insert failed")
@@ -148,15 +156,16 @@ def _flatten_outcome(row: dict[str, Any]) -> Optional[dict[str, Any]]:
     return outcomes[0] if outcomes else None
 
 
-CHECK_SELECT = (
-    "id,created_at,source,zip_code,go_no_go_status,risk_factors,location,pour_date,"
-    "mix_design,product,metrics,predictions,recommended_mitigation,concrete_temp_f,"
-    "pour_outcomes(outcome,notes,created_at)"
-)
-CHECK_SELECT_WITHOUT_PRODUCT = (
+_CHECK_CORE = (
     "id,created_at,source,zip_code,go_no_go_status,risk_factors,location,pour_date,"
     "mix_design,metrics,predictions,recommended_mitigation,concrete_temp_f,"
     "pour_outcomes(outcome,notes,created_at)"
+)
+# Newest columns first; each fallback drops a migration the database may not have run yet.
+CHECK_SELECTS = (
+    f"{_CHECK_CORE},product,watching,last_checked_at,watch_events",
+    f"{_CHECK_CORE},product",
+    _CHECK_CORE,
 )
 
 
@@ -198,6 +207,9 @@ def serialize_check(row: dict[str, Any]) -> dict[str, Any]:
         "outcome": outcome.get("outcome") if outcome else None,
         "outcome_at": outcome.get("created_at") if outcome else None,
         "outcome_notes": outcome.get("notes") if outcome else None,
+        "watching": bool(row.get("watching")),
+        "last_checked_at": row.get("last_checked_at"),
+        "watch_events": row.get("watch_events") if isinstance(row.get("watch_events"), list) else [],
     }
 
 
@@ -205,28 +217,92 @@ def list_checks(limit: int = 200) -> list[dict[str, Any]]:
     client = get_client()
     if client is None:
         return []
-    try:
-        result = (
-            client.table("pour_checks")
-            .select(CHECK_SELECT)
-            .order("created_at", desc=True)
-            .limit(limit)
-            .execute()
-        )
-    except Exception:
-        logger.exception("list_checks with product column failed; retrying without it")
+    for select in CHECK_SELECTS:
         try:
             result = (
                 client.table("pour_checks")
-                .select(CHECK_SELECT_WITHOUT_PRODUCT)
+                .select(select)
                 .order("created_at", desc=True)
                 .limit(limit)
                 .execute()
             )
         except Exception:
-            logger.exception("list_checks failed")
-            return []
-    return [serialize_check(row) for row in result.data or []]
+            logger.warning("list_checks select failed, trying an older column set")
+            continue
+        return [serialize_check(row) for row in result.data or []]
+    logger.error("list_checks failed for every known column set")
+    return []
+
+
+def get_check_for_watch(check_id: UUID) -> Optional[dict[str, Any]]:
+    """Load the stored baseline for a watched check."""
+    client = get_client()
+    if client is None:
+        return None
+    for select in CHECK_SELECTS:
+        try:
+            result = (
+                client.table("pour_checks")
+                .select(select)
+                .eq("id", str(check_id))
+                .limit(1)
+                .execute()
+            )
+        except Exception:
+            continue
+        rows = result.data or []
+        if not rows:
+            return None
+        return serialize_check(rows[0])
+    logger.error("get_check_for_watch failed for every known column set")
+    return None
+
+
+_CHECK_WRITE_FALLBACK = {
+    "go_no_go_status",
+    "risk_factors",
+    "metrics",
+    "predictions",
+    "recommended_mitigation",
+}
+
+
+def record_watch_poll(
+    check_id: UUID,
+    *,
+    status: str,
+    risk_factors: list[str],
+    metrics: dict[str, Any],
+    predictions: dict[str, Any],
+    recommended_mitigation: str,
+    new_events: list[dict[str, Any]],
+    prior_events: list[dict[str, Any]],
+    watching: bool,
+) -> None:
+    """Store the latest evaluation and append any material changes."""
+    client = get_client()
+    if client is None:
+        return
+    checked_at = datetime.now(timezone.utc).isoformat()
+    payload: dict[str, Any] = {
+        "go_no_go_status": status,
+        "risk_factors": risk_factors,
+        "metrics": metrics,
+        "predictions": predictions,
+        "recommended_mitigation": recommended_mitigation,
+        "watching": watching,
+        "last_checked_at": checked_at,
+    }
+    if new_events:
+        stamped = [{**event, "at": checked_at} for event in new_events]
+        payload["watch_events"] = ([*prior_events, *stamped])[-50:]
+    for attempt in (payload, {key: payload[key] for key in payload if key in _CHECK_WRITE_FALLBACK}):
+        try:
+            client.table("pour_checks").update(attempt).eq("id", str(check_id)).execute()
+            return
+        except Exception:
+            logger.warning("watch update failed, retrying without watch columns")
+    logger.error("record_watch_poll failed")
 
 
 def summarize_checks(rows: list[dict[str, Any]]) -> dict[str, Any]:

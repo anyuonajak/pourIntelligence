@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/style.css?v=2" />
+    <link rel="stylesheet" href="/style.css?v=3" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   </head>
   <body>
@@ -24,7 +24,8 @@
           <p class="eyebrow">Field advisory · ACI 305R / 306R · TMS 602</p>
           <h1>Pour Intelligence</h1>
           <p class="tagline">
-            Weather-physics go / no-go for a specific pour or masonry lay-up, on a specific date, at a specific site.
+            Weather-physics go / no-go for a specific pour or masonry lay-up — then we keep watching the forecast and
+            tell you when it moves.
           </p>
         </div>
         <p class="badge-note">Not a substitute for the engineer of record</p>
@@ -134,7 +135,7 @@
         <section class="result" id="result" aria-live="polite">
           <div class="empty" id="empty-state">
             <p class="empty-kicker" id="empty-kicker">Waiting on a concrete ticket</p>
-            <p id="empty-body">Fill the concrete slab ticket and run a check. You’ll get an ACI 305R / 306R stamp, risk factors, a 48-hour forecast chart, and a mitigation note.</p>
+            <p id="empty-body">Fill the concrete slab ticket and run a check. We stamp it, then keep watching the forecast and restamp if weather moves enough to change the call.</p>
           </div>
 
           <div id="result-body" hidden>
@@ -148,6 +149,15 @@
                 <p id="result-when">—</p>
               </div>
             </div>
+
+            <section id="watch" class="watch" hidden aria-live="polite">
+              <div class="watch-head">
+                <p class="watch-kicker"><span class="watch-dot" id="watch-dot"></span><span id="watch-title">Watching this pour</span></p>
+                <button type="button" id="watch-toggle" class="text-btn">Pause</button>
+              </div>
+              <p class="watch-status" id="watch-status">Starting the watch…</p>
+              <ol class="watch-log" id="watch-log"></ol>
+            </section>
 
             <ul id="risk-list" class="risk-list"></ul>
 
@@ -180,6 +190,6 @@
         · Advisory only · Not a substitute for ACI 305R / 306R or the engineer of record
       </footer>
     </div>
-    <script src="/app.js?v=3"></script>
+    <script src="/app.js?v=4"></script>
   </body>
 </html>

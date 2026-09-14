@@ -89,6 +89,26 @@ function predictionLine(row) {
   return `${to500} · ${to70}`;
 }
 
+function watchLine(row) {
+  const events = row.watch_events || [];
+  const updates = `${events.length} update${events.length === 1 ? "" : "s"}`;
+  if (!row.watching) return `Watch closed · ${updates}`;
+  return `Watching · last checked ${fmt(row.last_checked_at)} · ${updates}`;
+}
+
+function watchEvents(row) {
+  const events = (row.watch_events || []).slice(-5).reverse();
+  if (!events.length) return "";
+  return events
+    .map(
+      (event) =>
+        `<li><strong>${escapeText(event.label || event.code)}</strong>${escapeText(
+          event.detail || ""
+        )}<span class="watch-time">${escapeText(fmt(event.at))}</span></li>`
+    )
+    .join("");
+}
+
 function summarize(rows) {
   const withOutcome = rows.filter((row) => row.outcome);
   const byStatus = {};
@@ -102,6 +122,7 @@ function summarize(rows) {
   });
   return {
     total: rows.length,
+    watching: rows.filter((row) => row.watching).length,
     withOutcome: withOutcome.length,
     pending: rows.length - withOutcome.length,
     go: byStatus.GO || 0,
@@ -120,6 +141,7 @@ function renderSummary(rows) {
     metric("GO", summary.go),
     metric("Warning", summary.warning),
     metric("No-go", summary.nogo),
+    metric("Watching", summary.watching),
     metric("With outcome", summary.withOutcome),
     metric("Pending", summary.pending),
     metric("GO + success", summary.goSuccess),
@@ -169,7 +191,8 @@ function renderDetail(row) {
     <blockquote class="mitigation">${escapeText(row.recommended_mitigation || "No mitigation stored.")}</blockquote>
     <p class="disclaimer">Outcome: ${escapeText(row.outcome || "pending")} · Source: ${escapeText(
       row.source || "—"
-    )}</p>
+    )} · ${escapeText(watchLine(row))}</p>
+    <ol class="watch-log">${watchEvents(row)}</ol>
   `;
   const metricsEl = detailEl.querySelector("dl.metrics");
   metricsEl.append(
