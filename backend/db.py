@@ -290,9 +290,12 @@ def record_watch_poll(
         "metrics": metrics,
         "predictions": predictions,
         "recommended_mitigation": recommended_mitigation,
-        "watching": watching,
         "last_checked_at": checked_at,
     }
+    # Polls may close a watch when the protection window ends, but must not
+    # reopen one the customer already closed (including an in-flight poll).
+    if not watching:
+        payload["watching"] = False
     if new_events:
         stamped = [{**event, "at": checked_at} for event in new_events]
         payload["watch_events"] = ([*prior_events, *stamped])[-50:]
@@ -318,12 +321,15 @@ def set_watching(check_id: UUID, watching: bool, event: dict[str, Any] | None = 
     if event:
         prior = stored.get("watch_events") if isinstance(stored.get("watch_events"), list) else []
         payload["watch_events"] = [*prior, {**event, "at": checked_at}][-50:]
-    try:
-        client.table("pour_checks").update(payload).eq("id", str(check_id)).execute()
-        return True
-    except Exception:
-        logger.exception("set_watching failed")
-        return False
+    # watching=false must stick even if watch_events / last_checked_at cannot be written.
+    for attempt in (payload, {"watching": watching, "last_checked_at": checked_at}, {"watching": watching}):
+        try:
+            client.table("pour_checks").update(attempt).eq("id", str(check_id)).execute()
+            return True
+        except Exception:
+            logger.warning("set_watching failed, retrying without optional columns")
+    logger.error("set_watching failed")
+    return False
 
 
 def summarize_checks(rows: list[dict[str, Any]]) -> dict[str, Any]:

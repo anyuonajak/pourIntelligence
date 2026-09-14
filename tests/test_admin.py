@@ -84,6 +84,20 @@ def test_serialize_check_defaults_product_from_mix():
     assert out["product"] == "masonry"
 
 
+def test_serialize_check_watch_state_follows_customer():
+    watching = serialize_check({"watching": True, "risk_factors": [], "location": {}, "mix_design": {}})
+    closed = serialize_check({"watching": False, "risk_factors": [], "location": {}, "mix_design": {}})
+    assert watching["watching"] is True
+    assert closed["watching"] is False
+
+
+def test_admin_js_does_not_close_watches():
+    client = TestClient(app)
+    js = client.get("/admin.js").text
+    assert "Close watch" not in js
+    assert "data-close-check" not in js
+
+
 def test_demo_assets_are_cache_busted():
     client = TestClient(app)
     page = client.get("/")
@@ -101,4 +115,6 @@ def test_demo_js_isolates_products():
     assert "selectProduct" in js.text
     assert "pour-watch" in js.text
     assert "watchRoster" in js.text
+    assert "isPersistedCheckId" in js.text
+    assert "/v1/pour-watch/${checkId}/close" in js.text
     assert js.headers.get("cache-control") == "no-cache"

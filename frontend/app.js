@@ -105,6 +105,15 @@ function loadWatchRoster() {
   }
 }
 
+function isPersistedCheckId(value) {
+  const text = String(value || "").trim();
+  if (!text || text.startsWith("local-")) return false;
+  return (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text) ||
+    /^[0-9a-f]{32}$/i.test(text)
+  );
+}
+
 function persistWatchRoster() {
   try {
     const slim = watchRoster.slice(0, WATCH_STORE_MAX).map((entry) => ({
@@ -533,9 +542,10 @@ function startWatch(product, payload, requestBody, pourDateValue) {
   watch.watchUntil = payload.watch_until || null;
   watch.nextCheckSeconds = payload.next_check_seconds || 180;
   watch.lastCheckedAt = new Date().toISOString();
-  watch.request = { ...requestBody, check_id: payload.check_id || null };
+  const checkId = payload.check_id || null;
+  watch.request = { ...requestBody, check_id: checkId };
   watchByProduct[product] = watch;
-  const id = String(payload.check_id || `local-${Date.now()}`);
+  const id = checkId ? String(checkId) : `local-${Date.now()}`;
   selectedWatchId = id;
   upsertWatchEntry({
     id,
@@ -576,7 +586,11 @@ async function pollOneWatch(entry) {
     }
     watch.error = null;
     watch.lastCheckedAt = payload.checked_at;
-    watch.open = Boolean(payload.watching);
+    if (watch.closedByUser) {
+      watch.open = false;
+    } else {
+      watch.open = Boolean(payload.watching);
+    }
     watch.nextCheckSeconds = payload.next_check_seconds || watch.nextCheckSeconds;
     watch.watchUntil = payload.watch_until || watch.watchUntil;
     if (payload.changed) {
@@ -621,8 +635,8 @@ async function closeWatch(id) {
   entry.watch.paused = false;
   entry.watch.closedByUser = true;
   persistWatchRoster();
-  const checkId = entry.watch.request?.check_id || entry.id;
-  if (/^[0-9a-f-]{36}$/i.test(String(checkId))) {
+  const checkId = entry.watch.request?.check_id || entry.payload?.check_id || entry.id;
+  if (isPersistedCheckId(checkId)) {
     try {
       await fetch(`/v1/pour-watch/${checkId}/close`, { method: "POST" });
     } catch {

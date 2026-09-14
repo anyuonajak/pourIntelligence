@@ -170,6 +170,164 @@ def test_close_watch_without_database_is_ok(monkeypatch):
     assert response.json()["watching"] is False
 
 
+def test_close_watch_persists_watching_false(monkeypatch):
+    from uuid import uuid4
+
+    check_id = uuid4()
+    monkeypatch.setattr("backend.main.get_client", lambda: object())
+    monkeypatch.setattr(
+        "backend.main.get_check_for_watch",
+        lambda _cid: {"id": str(check_id), "watching": True, "watch_events": []},
+    )
+    seen: dict[str, object] = {}
+
+    def fake_set(cid, watching, event=None):
+        seen["check_id"] = cid
+        seen["watching"] = watching
+        seen["event"] = event
+        return True
+
+    monkeypatch.setattr("backend.main.set_watching", fake_set)
+    client = TestClient(app)
+    response = client.post(f"/v1/pour-watch/{check_id}/close")
+    assert response.status_code == 200
+    assert response.json()["watching"] is False
+    assert seen["check_id"] == check_id
+    assert seen["watching"] is False
+    assert seen["event"]["code"] == "WATCH_CLOSED"
+
+
+def test_watch_poll_does_not_reopen_a_closed_check(stub_weather, monkeypatch):
+    from uuid import uuid4
+
+    stub_weather(70.0)
+    check_id = uuid4()
+    monkeypatch.setattr(
+        "backend.main.get_check_for_watch",
+        lambda _cid: {
+            "go_no_go_status": "GO",
+            "risk_factors": [],
+            "metrics": _metrics(
+                concrete_temp_f=75.0,
+                min_temp_next_48h_f=55.0,
+            ),
+            "watch_events": [],
+            "watching": False,
+        },
+    )
+    captured: dict[str, object] = {}
+
+    def fake_record(_cid, **kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr("backend.main.record_watch_poll", fake_record)
+    client = TestClient(app)
+    response = client.post("/v1/pour-watch", json=_watch_body(check_id=str(check_id)))
+    assert response.status_code == 200
+    assert response.json()["watching"] is False
+    assert captured.get("watching") is False
+
+
+def test_set_watching_closes_even_if_event_write_fails(monkeypatch):
+    from uuid import uuid4
+
+    from backend import db
+
+    check_id = uuid4()
+    writes: list[dict] = []
+
+    class _Query:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def eq(self, *_args, **_kwargs):
+            return self
+
+        def execute(self):
+            writes.append(self.payload)
+            if "watch_events" in self.payload:
+                raise RuntimeError("watch_events column missing")
+            return type("Result", (), {"data": [{}]})()
+
+    class _Client:
+        def table(self, _name):
+            return self
+
+        def update(self, payload):
+            return _Query(payload)
+
+    monkeypatch.setattr(db, "get_client", lambda: _Client())
+    monkeypatch.setattr(db, "get_check_for_watch", lambda _cid: {"watch_events": []})
+    assert db.set_watching(check_id, False, {"code": "WATCH_CLOSED", "label": "Watch closed", "detail": ""}) is True
+    assert writes[0]["watching"] is False
+    assert "watch_events" in writes[0]
+    assert any(row.get("watching") is False and "watch_events" not in row for row in writes)
+
+
+def test_record_watch_poll_does_not_write_watching_true(monkeypatch):
+    from uuid import uuid4
+
+    from backend import db
+
+    writes: list[dict] = []
+
+    class _Query:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def eq(self, *_args, **_kwargs):
+            return self
+
+        def execute(self):
+            writes.append(self.payload)
+            return type("Result", (), {"data": [{}]})()
+
+    class _Client:
+        def table(self, _name):
+            return self
+
+        def update(self, payload):
+            return _Query(payload)
+
+    monkeypatch.setattr(db, "get_client", lambda: _Client())
+    db.record_watch_poll(
+        uuid4(),
+        status="GO",
+        risk_factors=[],
+        metrics=_metrics(),
+        predictions={},
+        recommended_mitigation="ok",
+        new_events=[],
+        prior_events=[],
+        watching=True,
+    )
+    assert writes
+    assert "watching" not in writes[0]
+
+    writes.clear()
+    db.record_watch_poll(
+        uuid4(),
+        status="GO",
+        risk_factors=[],
+        metrics=_metrics(),
+        predictions={},
+        recommended_mitigation="ok",
+        new_events=[],
+        prior_events=[],
+        watching=False,
+    )
+    assert writes[0]["watching"] is False
+
+
+def test_demo_close_uses_check_id_from_readiness():
+    client = TestClient(app)
+    js = client.get("/app.js").text
+    assert "payload.check_id" in js
+    assert "/v1/pour-watch/${checkId}/close" in js
+    assert "isPersistedCheckId" in js
+    assert "local-" in js
+
+
 def test_freeze_line_crossing_is_material():
     changes = diff_forecast(
         previous_status="WARNING",

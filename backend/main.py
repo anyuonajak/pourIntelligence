@@ -129,7 +129,13 @@ async def rate_limit_api(request: Request, call_next):
         if raw_key and api_key is None:
             return JSONResponse(status_code=401, content={"detail": "Invalid API key."})
         # Watch polls are cheap and repetitive, so they get their own quota.
-        watching = request.url.path.startswith("/v1/pour-watch")
+        # Customer close must always persist, even if the poll quota is exhausted.
+        path = request.url.path
+        closing = path.startswith("/v1/pour-watch/") and path.rstrip("/").endswith("/close")
+        watching = path.startswith("/v1/pour-watch") and not closing
+        if closing:
+            request.state.api_key = api_key
+            return await call_next(request)
         if api_key:
             limit = int(api_key.get("rate_limit_per_hour") or settings.api_rate_limit_per_hour)
             bucket = f"key:{api_key['id']}"
