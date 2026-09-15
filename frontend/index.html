@@ -6,7 +6,7 @@
     <title>Pour Intelligence — pour readiness</title>
     <meta
       name="description"
-      content="Check whether a concrete or masonry pour is safe to proceed from the forecast and ACI 305R / 306R guidance."
+      content="Check whether a concrete or masonry pour is ready from the forecast, then watch the window."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/style.css?v=7" />
+    <link rel="stylesheet" href="/style.css?v=10" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   </head>
   <body>
@@ -22,14 +22,13 @@
       <div class="topbar-inner">
         <div class="brand">
           <a class="wordmark" href="/">Pour Intelligence</a>
-          <span class="product-sub" id="workspace-label">Concrete slab · ACI 305R / 306R</span>
+          <span class="product-sub" id="workspace-label">Concrete slab</span>
         </div>
         <div class="topbar-actions">
           <div class="product-switch" role="group" aria-label="Product">
             <button type="button" class="active" data-product="concrete">Concrete</button>
             <button type="button" data-product="masonry">Masonry</button>
           </div>
-          <span class="topbar-note">Advisory · not EOR</span>
         </div>
       </div>
     </header>
@@ -133,7 +132,7 @@
             <button type="submit" id="submit-btn" class="btn-primary">Check this pour</button>
             <p id="form-error" class="form-error" hidden></p>
             <p class="ticket-foot">
-              Results are advisory. <a href="/terms" target="_blank" rel="noopener noreferrer">Terms</a>
+              <a href="/terms" target="_blank" rel="noopener noreferrer">Terms</a>
             </p>
           </form>
         </section>
@@ -147,7 +146,7 @@
           <div id="result-body" hidden>
             <div class="result-head">
               <div class="result-meta">
-                <p class="stamp-kicker">Pour advisory</p>
+                <p class="stamp-kicker" id="result-kicker">Concrete slab ticket</p>
                 <h2 id="result-location">—</h2>
                 <p id="result-when">—</p>
               </div>
@@ -158,27 +157,32 @@
 
             <section id="watch" class="watch" hidden aria-live="polite">
               <div class="watch-head">
-                <p class="watch-kicker"><span class="watch-dot" id="watch-dot"></span><span id="watch-title">Watching this pour</span></p>
+                <p class="watch-kicker">
+                  <span class="watch-dot" id="watch-dot"></span>
+                  <span id="watch-title">Watching</span>
+                  <span class="watch-status" id="watch-status">Starting…</span>
+                </p>
                 <div class="watch-actions">
                   <button type="button" id="watch-toggle" class="text-btn">Pause</button>
                   <button type="button" id="watch-close" class="text-btn">Close</button>
                 </div>
               </div>
-              <p class="watch-status" id="watch-status">Starting the watch…</p>
-              <ol class="watch-log" id="watch-log"></ol>
             </section>
-
-            <ul id="risk-list" class="risk-list"></ul>
-
-            <dl class="metrics" id="metrics"></dl>
 
             <div class="chart-wrap">
               <h3 id="chart-title">Pour window · 48 hours</h3>
               <canvas id="forecast-chart" aria-label="Forecast chart"></canvas>
             </div>
 
-            <div class="predictions" id="predictions"></div>
-            <blockquote class="mitigation" id="mitigation"></blockquote>
+            <dl class="metrics" id="metrics"></dl>
+
+            <section class="event-log-panel" aria-labelledby="event-log-heading">
+              <div class="event-log-head">
+                <h3 id="event-log-heading">Event log</h3>
+              </div>
+              <ol class="event-log" id="watch-log"></ol>
+            </section>
+
             <div id="outcome" class="outcome" hidden>
               <p class="outcome-kicker" id="outcome-kicker">How did this pour go?</p>
               <p>Your answer is stored against this check so we can compare the model to real results.</p>
@@ -190,7 +194,6 @@
               </div>
               <p id="outcome-status" class="outcome-status" hidden></p>
             </div>
-            <p class="disclaimer" id="disclaimer"></p>
           </div>
         </section>
       </main>
@@ -223,9 +226,8 @@
 
       <footer class="site-foot">
         <a href="/terms" target="_blank" rel="noopener noreferrer">Terms</a>
-        · Advisory only · Not a substitute for ACI 305R / 306R or the engineer of record
       </footer>
     </div>
-    <script src="/app.js?v=9"></script>
+    <script src="/app.js?v=10"></script>
   </body>
 </html>

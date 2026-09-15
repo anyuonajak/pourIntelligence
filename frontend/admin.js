@@ -7,9 +7,16 @@ const detailEl = document.querySelector("#check-detail");
 const workspaceNote = document.querySelector("#workspace-note");
 
 const WORKSPACE = {
-  concrete: "Concrete slab · ACI 305R / 306R",
-  masonry: "Masonry · TMS 602 / ACI 530.1",
+  concrete: "Concrete slab",
+  masonry: "Masonry",
 };
+
+const NOGO_CODES = new Set([
+  "EXTREME_EVAPORATION_RATE",
+  "FREEZING_BEFORE_500_PSI",
+  "HEAVY_RAIN_DURING_POUR",
+  "MASONRY_BELOW_20F",
+]);
 
 function metric(label, value) {
   const wrap = document.createElement("div");
@@ -81,21 +88,30 @@ function mixLine(row) {
   return parts.join(" · ");
 }
 
-function predictionLine(row) {
+function predictionFacts(row) {
   const predictions = row.predictions || {};
   if ((row.product || "concrete") === "masonry") {
-    if (predictions.protection_period_hours == null) return "Protection window: see TMS 602";
-    return `Protect wall ~${predictions.protection_period_hours} hr after laying`;
+    return [
+      [
+        "Protection period",
+        predictions.protection_period_hours == null ? "—" : `${predictions.protection_period_hours} hr`,
+      ],
+    ];
   }
-  const to500 =
-    predictions.estimated_time_to_500_psi_hours == null
-      ? "500 psi: not in forecast"
-      : `500 psi: ~${predictions.estimated_time_to_500_psi_hours} hr`;
-  const to70 =
-    predictions.estimated_days_to_70_percent_strength == null
-      ? "70% strength: not in forecast"
-      : `70% strength: ~${predictions.estimated_days_to_70_percent_strength} days`;
-  return `${to500} · ${to70}`;
+  return [
+    [
+      "500 psi",
+      predictions.estimated_time_to_500_psi_hours == null
+        ? "—"
+        : `~${predictions.estimated_time_to_500_psi_hours} hr`,
+    ],
+    [
+      "70% strength",
+      predictions.estimated_days_to_70_percent_strength == null
+        ? "—"
+        : `~${predictions.estimated_days_to_70_percent_strength} days`,
+    ],
+  ];
 }
 
 function watchLine(row) {
@@ -105,16 +121,86 @@ function watchLine(row) {
   return `Watching · last checked ${fmt(row.last_checked_at)} · ${updates}`;
 }
 
-function watchEvents(row) {
-  const events = (row.watch_events || []).slice(-5).reverse();
-  if (!events.length) return "";
+function stripSpecCopy(text) {
+  return String(text || "")
+    .replace(/\b(ACI|TMS)\s*[\d.]+R?(?:\s*\/\s*(?:ACI|TMS)?\s*[\d.]+R?)*/gi, "")
+    .replace(/\b(?:ACI|TMS)\b/gi, "")
+    .replace(/\badvisory\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([.,;:])/g, "$1")
+    .trim();
+}
+
+function eventSeverity(event) {
+  const code = String(event.code || "");
+  const current = String(event.current || "").toUpperCase();
+  const riskCode = code.startsWith("RISK_ADDED_")
+    ? code.slice("RISK_ADDED_".length)
+    : code.startsWith("RISK_CLEARED_")
+      ? code.slice("RISK_CLEARED_".length)
+      : code;
+  if (code === "STATUS") {
+    if (current === "NO_GO") return "critical";
+    if (current === "WARNING") return "warning";
+    return "info";
+  }
+  if (code.startsWith("RISK_CLEARED_")) return "info";
+  if (NOGO_CODES.has(riskCode) || NOGO_CODES.has(code)) return "critical";
+  if (code.startsWith("RISK_ADDED_") || event.kind === "risk") return "warning";
+  if (code.startsWith("CROSS_")) return "warning";
+  return "info";
+}
+
+function eventFact(event) {
+  const code = String(event.code || "");
+  if (code === "STATUS") {
+    const prev = event.previous ? String(event.previous).replace("_", "-") : "";
+    const cur = event.current ? String(event.current).replace("_", "-") : "";
+    if (prev && cur) return `${prev} → ${cur}`;
+    if (cur) return `Stamped ${cur}`;
+    return stripSpecCopy(event.detail) || "Stamp updated";
+  }
+  if (code.startsWith("RISK_ADDED_")) {
+    return stripSpecCopy(event.detail || event.label) || "Risk triggered";
+  }
+  if (code.startsWith("RISK_CLEARED_")) {
+    const name = stripSpecCopy(event.detail || event.label) || "Risk";
+    return `${name} cleared`;
+  }
+  if (code === "WATCH_STARTED") return "Watch started";
+  if (code === "WATCH_PAUSED") return "Watch paused";
+  if (code === "WATCH_RESUMED") return "Watch resumed";
+  if (code === "WATCH_CLOSED") return "Watch closed";
+  const label = stripSpecCopy(event.label);
+  const detail = stripSpecCopy(event.detail);
+  if (code.startsWith("METRIC_") || code.startsWith("CROSS_")) {
+    return [label, detail].filter(Boolean).join(" · ");
+  }
+  if (event.kind === "risk") return label || detail || "Risk triggered";
+  return label || detail || "Update";
+}
+
+function watchEventRows(row) {
+  const events = (row.watch_events || []).slice().reverse();
+  const location = row.location_name || row.zip_code || "";
+  const productLabel = (row.product || "concrete") === "masonry" ? "Masonry" : "Concrete";
+  const secondary = [location, productLabel].filter(Boolean).join(" · ");
+  if (!events.length) {
+    return `<li class="event-empty">No events yet.</li>`;
+  }
   return events
-    .map(
-      (event) =>
-        `<li><strong>${escapeText(event.label || event.code)}</strong>${escapeText(
-          event.detail || ""
-        )}<span class="watch-time">${escapeText(fmt(event.at))}</span></li>`
-    )
+    .map((event) => {
+      const severity = eventSeverity(event);
+      const sevLabel = severity === "critical" ? "Critical" : severity === "warning" ? "Warning" : "Info";
+      return `<li data-severity="${severity}">
+        <span class="event-sev">${sevLabel}</span>
+        <span class="event-time">${escapeText(fmt(event.at))}</span>
+        <span class="event-body">
+          <span class="event-fact">${escapeText(eventFact(event))}</span>
+          <span class="event-sub">${escapeText(secondary)}</span>
+        </span>
+      </li>`;
+    })
     .join("");
 }
 
@@ -163,28 +249,14 @@ function renderDetail(row) {
   if (!row) {
     const label = productFilter === "masonry" ? "masonry lay-up" : "concrete slab";
     detailEl.innerHTML = `<p class="empty-kicker">No ${escapeText(label)} checks yet</p>
-      <p>Run a ${escapeText(label)} ticket on the demo. This panel will show mix, risks, metrics, and predictions.</p>`;
+      <p>Run a ${escapeText(label)} ticket on the demo. This panel will show mix, metrics, and the event log.</p>`;
     return;
   }
 
   const metrics = row.metrics || {};
   const product = row.product || "concrete";
   const materialLabel = product === "masonry" ? "Mortar temp" : "Concrete temp";
-  const kicker = product === "masonry" ? "Lay advisory" : "Pour advisory";
-  const details = row.risk_factor_details || [];
-  const nogo = new Set(["EXTREME_EVAPORATION_RATE", "FREEZING_BEFORE_500_PSI", "HEAVY_RAIN_DURING_POUR", "MASONRY_BELOW_20F"]);
-  const risks =
-    details.length === 0
-      ? `<li><strong>No risk factors triggered</strong>Forecast sat inside normal placement ranges.</li>`
-      : details
-          .map((factor) => {
-            const severity = nogo.has(factor.code) ? "nogo" : "warn";
-            return `<li data-severity="${severity}"><strong>${escapeText(factor.label)}</strong>${escapeText(
-              factor.detail
-            )}</li>`;
-          })
-          .join("");
-
+  const kicker = product === "masonry" ? "Masonry ticket" : "Concrete slab ticket";
   const fmtMetric = (value, suffix) => (value == null || value === "" ? "—" : `${value}${suffix || ""}`);
 
   detailEl.innerHTML = `
@@ -198,14 +270,15 @@ function renderDetail(row) {
         <span class="stamp-status">${escapeText(String(row.go_no_go_status || "").replace("_", "-"))}</span>
       </div>
     </div>
-    <ul class="risk-list">${risks}</ul>
+    <p class="watch-status">${escapeText(watchLine(row))}</p>
     <dl class="metrics"></dl>
-    <div class="predictions"><span>${escapeText(predictionLine(row))}</span></div>
-    <blockquote class="mitigation">${escapeText(row.recommended_mitigation || "No mitigation stored.")}</blockquote>
-    <p class="disclaimer">Outcome: ${escapeText(row.outcome || "pending")} · Source: ${escapeText(
+    <section class="event-log-panel">
+      <div class="event-log-head"><h3>Event log</h3></div>
+      <ol class="event-log">${watchEventRows(row)}</ol>
+    </section>
+    <p class="ticket-foot">Outcome: ${escapeText(row.outcome || "pending")} · Source: ${escapeText(
       row.source || "—"
-    )} · ${escapeText(watchLine(row))}</p>
-    <ol class="watch-log">${watchEvents(row)}</ol>
+    )}</p>
   `;
   const metricsEl = detailEl.querySelector("dl.metrics");
   metricsEl.append(
@@ -216,7 +289,8 @@ function renderDetail(row) {
     metric("Evaporation", fmtMetric(metrics.calculated_evaporation_rate_lbs_sqft_hr, " lb/ft²/hr")),
     metric("Rain", fmtMetric(metrics.precipitation_in, " in")),
     metric("Min 24h", fmtMetric(metrics.min_temp_next_24h_f, " °F")),
-    metric("Min 48h", fmtMetric(metrics.min_temp_next_48h_f, " °F"))
+    metric("Min 48h", fmtMetric(metrics.min_temp_next_48h_f, " °F")),
+    ...predictionFacts(row).map(([label, value]) => metric(label, value))
   );
 }
 

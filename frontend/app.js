@@ -7,13 +7,10 @@ const emptyState = document.querySelector("#empty-state");
 const resultBody = document.querySelector("#result-body");
 const stamp = document.querySelector("#stamp");
 const stampStatus = document.querySelector("#stamp-status");
+const resultKicker = document.querySelector("#result-kicker");
 const resultLocation = document.querySelector("#result-location");
 const resultWhen = document.querySelector("#result-when");
-const riskList = document.querySelector("#risk-list");
 const metricsEl = document.querySelector("#metrics");
-const predictionsEl = document.querySelector("#predictions");
-const mitigationEl = document.querySelector("#mitigation");
-const disclaimerEl = document.querySelector("#disclaimer");
 const outcomeEl = document.querySelector("#outcome");
 const outcomeStatus = document.querySelector("#outcome-status");
 const presetButtons = document.querySelectorAll("#site-presets button");
@@ -36,7 +33,7 @@ const COPY = {
   concrete: {
     heading: "Concrete slab ticket",
     sub: "Jobsite local time. Defaults are a typical Type I slab.",
-    workspace: "Concrete slab · ACI 305R / 306R",
+    workspace: "Concrete slab",
     submit: "Check this pour",
     emptyKicker: "Waiting on a concrete ticket",
     emptyBody:
@@ -49,8 +46,8 @@ const COPY = {
   },
   masonry: {
     heading: "Masonry ticket",
-    sub: "Jobsite local time. TMS 602 / ACI 530.1 hot- and cold-weather masonry.",
-    workspace: "Masonry · TMS 602 / ACI 530.1",
+    sub: "Jobsite local time. Defaults are a typical CMU / Type N lay-up.",
+    workspace: "Masonry",
     submit: "Check this lay-up",
     emptyKicker: "Waiting on a masonry ticket",
     emptyBody:
@@ -250,14 +247,10 @@ function clearResultPanel() {
   currentCheckId = null;
   stamp.dataset.status = "";
   stampStatus.textContent = "";
-  document.querySelector(".stamp-kicker").textContent = "";
+  resultKicker.textContent = "";
   resultLocation.textContent = "";
   resultWhen.textContent = "";
-  riskList.innerHTML = "";
   metricsEl.innerHTML = "";
-  predictionsEl.innerHTML = "";
-  mitigationEl.textContent = "";
-  disclaimerEl.textContent = "";
   outcomeStatus.hidden = true;
   outcomeStatus.textContent = "";
   outcomeEl.hidden = true;
@@ -409,67 +402,53 @@ function paintResult(payload, pourDateValue) {
   emptyState.hidden = true;
   resultBody.hidden = false;
 
+  const product = payload.product === "masonry" ? "masonry" : "concrete";
   const status = payload.go_no_go_status;
   stamp.dataset.status = status;
   stampStatus.textContent = status.replace("_", "-");
-  document.querySelector(".stamp-kicker").textContent =
-    payload.product === "masonry" ? "Lay advisory" : "Pour advisory";
+  resultKicker.textContent = COPY[product].heading;
   resultLocation.textContent = payload.location.name;
   resultWhen.textContent = formatWhen(pourDateValue, payload.location.timezone);
 
-  riskList.innerHTML = "";
-  const details = payload.risk_factor_details || [];
-  if (!details.length) {
-    const item = document.createElement("li");
-    item.innerHTML =
-      "<strong>No risk factors triggered</strong>Forecast conditions sit inside normal placement ranges.";
-    riskList.append(item);
-  } else {
-    details.forEach((factor) => {
-      const item = document.createElement("li");
-      if (NOGO_CODES.has(factor.code)) item.dataset.severity = "nogo";
-      else item.dataset.severity = "warn";
-      item.innerHTML = `<strong>${factor.label}</strong>${factor.detail}`;
-      riskList.append(item);
-    });
-  }
-
   const metrics = payload.metrics;
-  const materialLabel = payload.product === "masonry" ? "Mortar temp" : "Concrete temp";
-  const rainLabel = payload.product === "masonry" ? "Rain at lay-up" : "Rain at pour";
+  const predictions = payload.predictions || {};
+  const materialLabel = product === "masonry" ? "Mortar temp" : "Concrete temp";
+  const rainLabel = product === "masonry" ? "Rain at lay-up" : "Rain at pour";
   metricsEl.innerHTML = "";
-  metricsEl.append(
+  const items = [
     metric("Air temp", `${metrics.ambient_temp_f} °F`),
     metric(materialLabel, `${metrics.concrete_temp_f} °F`),
-    metric("Relative humidity", `${metrics.relative_humidity_pct}%`),
+    metric("RH", `${metrics.relative_humidity_pct}%`),
     metric("Wind", `${metrics.wind_speed_mph} mph`),
     metric("Evaporation", `${metrics.calculated_evaporation_rate_lbs_sqft_hr} lb/ft²/hr`),
     metric(rainLabel, `${metrics.precipitation_in} in`),
-    metric("Min next 24h", metrics.min_temp_next_24h_f == null ? "—" : `${metrics.min_temp_next_24h_f} °F`),
-    metric("Min next 48h", metrics.min_temp_next_48h_f == null ? "—" : `${metrics.min_temp_next_48h_f} °F`)
-  );
-
-  const predictions = payload.predictions;
-  if (payload.product === "masonry") {
-    const protect =
-      predictions.protection_period_hours == null
-        ? "Protection window: see TMS 602"
-        : `Protect wall ~${predictions.protection_period_hours} hr after laying`;
-    predictionsEl.innerHTML = `<span>${protect}</span><span>TMS 602 / ACI 530.1</span>`;
+    metric("Min 24h", metrics.min_temp_next_24h_f == null ? "—" : `${metrics.min_temp_next_24h_f} °F`),
+    metric("Min 48h", metrics.min_temp_next_48h_f == null ? "—" : `${metrics.min_temp_next_48h_f} °F`),
+  ];
+  if (product === "masonry") {
+    items.push(
+      metric(
+        "Protection period",
+        predictions.protection_period_hours == null ? "—" : `${predictions.protection_period_hours} hr`
+      )
+    );
   } else {
-    const timeTo500 =
-      predictions.estimated_time_to_500_psi_hours == null
-        ? "500 psi: not reached in forecast"
-        : `500 psi: ~${predictions.estimated_time_to_500_psi_hours} hr`;
-    const timeTo70 =
-      predictions.estimated_days_to_70_percent_strength == null
-        ? "70% strength: not reached in forecast"
-        : `70% strength: ~${predictions.estimated_days_to_70_percent_strength} days`;
-    predictionsEl.innerHTML = `<span>${timeTo500}</span><span>${timeTo70}</span>`;
+    items.push(
+      metric(
+        "500 psi",
+        predictions.estimated_time_to_500_psi_hours == null
+          ? "—"
+          : `~${predictions.estimated_time_to_500_psi_hours} hr`
+      ),
+      metric(
+        "70% strength",
+        predictions.estimated_days_to_70_percent_strength == null
+          ? "—"
+          : `~${predictions.estimated_days_to_70_percent_strength} days`
+      )
+    );
   }
-
-  mitigationEl.textContent = payload.recommended_mitigation;
-  disclaimerEl.textContent = payload.disclaimer;
+  metricsEl.append(...items);
   renderChart(payload.hourly || []);
 
   currentCheckId = payload.check_id || null;
@@ -491,6 +470,127 @@ function clockTime(value) {
   return when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+function stripSpecCopy(text) {
+  return String(text || "")
+    .replace(/\b(ACI|TMS)\s*[\d.]+R?(?:\s*\/\s*(?:ACI|TMS)?\s*[\d.]+R?)*/gi, "")
+    .replace(/\b(?:ACI|TMS)\b/gi, "")
+    .replace(/\badvisory\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([.,;:])/g, "$1")
+    .trim();
+}
+
+function eventSeverity(event) {
+  const code = String(event.code || "");
+  const current = String(event.current || "").toUpperCase();
+  const riskCode = code.startsWith("RISK_ADDED_")
+    ? code.slice("RISK_ADDED_".length)
+    : code.startsWith("RISK_CLEARED_")
+      ? code.slice("RISK_CLEARED_".length)
+      : code;
+  if (code === "STATUS") {
+    if (current === "NO_GO") return "critical";
+    if (current === "WARNING") return "warning";
+    return "info";
+  }
+  if (code.startsWith("RISK_CLEARED_")) return "info";
+  if (NOGO_CODES.has(riskCode) || NOGO_CODES.has(code)) return "critical";
+  if (code.startsWith("RISK_ADDED_") || event.kind === "risk") return "warning";
+  if (code.startsWith("CROSS_")) return "warning";
+  return "info";
+}
+
+function eventFact(event) {
+  const code = String(event.code || "");
+  if (code === "STATUS") {
+    const prev = event.previous ? String(event.previous).replace("_", "-") : "";
+    const cur = event.current ? String(event.current).replace("_", "-") : "";
+    if (prev && cur) return `${prev} → ${cur}`;
+    if (cur) return `Stamped ${cur}`;
+    return stripSpecCopy(event.detail) || "Stamp updated";
+  }
+  if (code.startsWith("RISK_ADDED_")) {
+    return stripSpecCopy(event.detail || event.label) || "Risk triggered";
+  }
+  if (code.startsWith("RISK_CLEARED_")) {
+    const name = stripSpecCopy(event.detail || event.label) || "Risk";
+    return `${name} cleared`;
+  }
+  if (code === "WATCH_STARTED") return "Watch started";
+  if (code === "WATCH_PAUSED") return "Watch paused";
+  if (code === "WATCH_RESUMED") return "Watch resumed";
+  if (code === "WATCH_CLOSED") return "Watch closed";
+  const label = stripSpecCopy(event.label);
+  const detail = stripSpecCopy(event.detail);
+  if (code.startsWith("METRIC_") || code.startsWith("CROSS_")) {
+    return [label, detail].filter(Boolean).join(" · ");
+  }
+  if (event.kind === "risk") return label || detail || "Risk triggered";
+  return label || detail || "Update";
+}
+
+function renderEventLog(events, location, product) {
+  const productLabel = product === "masonry" ? "Masonry" : "Concrete";
+  const secondary = [location, productLabel].filter(Boolean).join(" · ");
+  watchLog.innerHTML = "";
+  if (!events.length) {
+    const item = document.createElement("li");
+    item.className = "event-empty";
+    item.textContent = "No events yet.";
+    watchLog.append(item);
+    return;
+  }
+  events.forEach((event) => {
+    const severity = eventSeverity(event);
+    const item = document.createElement("li");
+    item.dataset.severity = severity;
+    const sev = document.createElement("span");
+    sev.className = "event-sev";
+    sev.textContent = severity === "critical" ? "Critical" : severity === "warning" ? "Warning" : "Info";
+    const time = document.createElement("span");
+    time.className = "event-time";
+    time.textContent = clockTime(event.at);
+    const body = document.createElement("span");
+    body.className = "event-body";
+    const fact = document.createElement("span");
+    fact.className = "event-fact";
+    fact.textContent = eventFact(event);
+    body.append(fact);
+    if (secondary) {
+      const sub = document.createElement("span");
+      sub.className = "event-sub";
+      sub.textContent = secondary;
+      body.append(sub);
+    }
+    item.append(sev, time, body);
+    watchLog.append(item);
+  });
+}
+
+function pushWatchEvent(watch, event) {
+  const next = { at: new Date().toISOString(), ...event };
+  watch.events = [next, ...watch.events].slice(0, 20);
+}
+
+function seedWatchEvents(payload) {
+  const at = new Date().toISOString();
+  const status = payload.go_no_go_status || "";
+  const details = payload.risk_factor_details || [];
+  const events = [];
+  details.forEach((factor) => {
+    events.push({ code: factor.code, label: factor.label || factor.code, at, kind: "risk" });
+  });
+  events.push({
+    code: "STATUS",
+    label: "Stamp",
+    current: status,
+    previous: "",
+    at,
+  });
+  events.push({ code: "WATCH_STARTED", label: "Watch started", at });
+  return events.slice(0, 20);
+}
+
 function stopWatchTimer() {
   if (watchTimer) {
     clearTimeout(watchTimer);
@@ -508,9 +608,11 @@ function scheduleWatch() {
 
 function renderWatch(product) {
   const watch = watchByProduct[product];
-  const label = product === "masonry" ? "lay-up" : "pour";
+  const entry = watchRoster.find((item) => item.id === selectedWatchId && item.product === product);
+  const location = entry?.location || "";
   if (!watch.request) {
     watchEl.hidden = true;
+    renderEventLog(watch.events || [], location, product);
     return;
   }
   watchEl.hidden = false;
@@ -525,38 +627,23 @@ function renderWatch(product) {
   watchEl.dataset.state = state;
 
   if (!watch.open) {
-    watchTitle.textContent = `Watch closed on this ${label}`;
-    watchStatusEl.textContent = watch.closedByUser
-      ? `You closed this watch. Last checked ${clockTime(watch.lastCheckedAt)}.`
-      : `The protection window has passed. Last checked ${clockTime(watch.lastCheckedAt)}.`;
+    watchTitle.textContent = "Closed";
+    watchStatusEl.textContent = `Last checked ${clockTime(watch.lastCheckedAt)}`;
   } else if (watch.paused) {
-    watchTitle.textContent = `Watch paused on this ${label}`;
-    watchStatusEl.textContent = `Last checked ${clockTime(watch.lastCheckedAt)}. Resume to keep monitoring the forecast.`;
+    watchTitle.textContent = "Paused";
+    watchStatusEl.textContent = `Last checked ${clockTime(watch.lastCheckedAt)}`;
   } else if (watch.error) {
-    watchTitle.textContent = `Watching this ${label}`;
-    watchStatusEl.textContent = `Could not reach the forecast (${watch.error}). Retrying.`;
+    watchTitle.textContent = "Watching";
+    watchStatusEl.textContent = `Retrying (${watch.error})`;
   } else if (!watch.lastCheckedAt) {
-    watchTitle.textContent = `Watching this ${label}`;
-    watchStatusEl.textContent = "Starting the watch…";
+    watchTitle.textContent = "Watching";
+    watchStatusEl.textContent = "Starting…";
   } else {
-    watchTitle.textContent = `Watching this ${label}`;
-    const tail = watch.events.length
-      ? `${watch.events.length} update${watch.events.length === 1 ? "" : "s"} so far`
-      : "no material change";
-    watchStatusEl.textContent = `Last checked ${clockTime(watch.lastCheckedAt)} · ${tail}`;
+    watchTitle.textContent = "Watching";
+    watchStatusEl.textContent = `Last checked ${clockTime(watch.lastCheckedAt)}`;
   }
 
-  watchLog.innerHTML = "";
-  watch.events.forEach((event) => {
-    const item = document.createElement("li");
-    if (event.code === "STATUS") item.dataset.severity = "status";
-    item.innerHTML = `<strong>${event.label}</strong>${event.detail}`;
-    const time = document.createElement("span");
-    time.className = "watch-time";
-    time.textContent = clockTime(event.at);
-    item.append(time);
-    watchLog.append(item);
-  });
+  renderEventLog(watch.events || [], location, product);
 }
 
 function startWatch(product, payload, requestBody, pourDateValue) {
@@ -567,6 +654,7 @@ function startWatch(product, payload, requestBody, pourDateValue) {
   watch.lastCheckedAt = new Date().toISOString();
   const checkId = payload.check_id || null;
   watch.request = { ...requestBody, check_id: checkId };
+  watch.events = seedWatchEvents(payload);
   watchByProduct[product] = watch;
   const id = checkId ? String(checkId) : `local-${Date.now()}`;
   selectedWatchId = id;
@@ -609,6 +697,7 @@ async function pollOneWatch(entry) {
     }
     watch.error = null;
     watch.lastCheckedAt = payload.checked_at;
+    const wasOpen = watch.open && !watch.closedByUser;
     if (watch.closedByUser) {
       watch.open = false;
     } else {
@@ -616,6 +705,9 @@ async function pollOneWatch(entry) {
     }
     watch.nextCheckSeconds = payload.next_check_seconds || watch.nextCheckSeconds;
     watch.watchUntil = payload.watch_until || watch.watchUntil;
+    if (wasOpen && !watch.open && !watch.closedByUser) {
+      pushWatchEvent(watch, { code: "WATCH_CLOSED", label: "Watch closed", at: payload.checked_at });
+    }
     if (payload.changed) {
       const at = payload.checked_at;
       watch.events = [...payload.changes.map((change) => ({ ...change, at })), ...watch.events].slice(0, 20);
@@ -654,6 +746,7 @@ async function pollAllWatches() {
 async function closeWatch(id) {
   const entry = watchRoster.find((item) => item.id === id);
   if (!entry || !entry.watch.open) return;
+  pushWatchEvent(entry.watch, { code: "WATCH_CLOSED", label: "Watch closed" });
   entry.watch.open = false;
   entry.watch.paused = false;
   entry.watch.closedByUser = true;
@@ -680,6 +773,10 @@ watchToggle.addEventListener("click", () => {
   const watch = entry?.watch || watchByProduct[currentProduct];
   if (!watch.open) return;
   watch.paused = !watch.paused;
+  pushWatchEvent(watch, {
+    code: watch.paused ? "WATCH_PAUSED" : "WATCH_RESUMED",
+    label: watch.paused ? "Watch paused" : "Watch resumed",
+  });
   persistWatchRoster();
   renderWatch(currentProduct);
   renderWatchList();
