@@ -36,8 +36,6 @@ const COPY = {
     workspace: "Concrete slab",
     submit: "Check this pour",
     emptyKicker: "Waiting on a concrete ticket",
-    emptyBody:
-      "Fill the concrete slab ticket and run a check. We stamp it, then keep watching the forecast and restamp if weather moves enough to change the call.",
     dateLabel: "Pour date & time",
     outcomeKicker: "How did this pour go?",
     chartTitle: "Pour window · 48 hours",
@@ -50,8 +48,6 @@ const COPY = {
     workspace: "Masonry",
     submit: "Check this lay-up",
     emptyKicker: "Waiting on a masonry ticket",
-    emptyBody:
-      "Fill the masonry ticket and run a check. We stamp it, then keep watching the forecast and restamp if weather moves enough to change the call.",
     dateLabel: "Lay-up date & time",
     outcomeKicker: "How did this lay-up go?",
     chartTitle: "Lay-up window · 48 hours",
@@ -152,9 +148,7 @@ function renderWatchList() {
   });
   if (!rows.length) {
     const empty =
-      watchRoster.length === 0
-        ? "No watches yet. Submit a ticket to start one."
-        : `No ${watchListFilter} watches.`;
+      watchRoster.length === 0 ? "No watches yet." : `No ${watchListFilter} watches.`;
     watchListBody.innerHTML = `<tr><td colspan="5" class="watch-list-empty">${empty}</td></tr>`;
     return;
   }
@@ -262,7 +256,6 @@ function clearResultPanel() {
 function showEmptyState() {
   const copy = COPY[currentProduct];
   document.querySelector("#empty-kicker").textContent = copy.emptyKicker;
-  document.querySelector("#empty-body").textContent = copy.emptyBody;
   emptyState.hidden = false;
   resultBody.hidden = true;
   clearResultPanel();

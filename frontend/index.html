@@ -4,17 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Pour Intelligence — pour readiness</title>
-    <meta
-      name="description"
-      content="Check whether a concrete or masonry pour is ready from the forecast, then watch the window."
-    />
+    <meta name="description" content="Pour Intelligence" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/style.css?v=10" />
+    <link rel="stylesheet" href="/style.css?v=11" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   </head>
   <body>
@@ -140,7 +137,7 @@
         <section class="panel result" id="result" aria-live="polite">
           <div class="empty" id="empty-state">
             <p class="empty-kicker" id="empty-kicker">Waiting on a concrete ticket</p>
-            <p id="empty-body">Fill the concrete slab ticket and run a check. We stamp it, then keep watching the forecast and restamp if weather moves enough to change the call.</p>
+            <p id="empty-body" hidden></p>
           </div>
 
           <div id="result-body" hidden>
@@ -185,7 +182,6 @@
 
             <div id="outcome" class="outcome" hidden>
               <p class="outcome-kicker" id="outcome-kicker">How did this pour go?</p>
-              <p>Your answer is stored against this check so we can compare the model to real results.</p>
               <div class="outcome-buttons">
                 <button type="button" data-outcome="success">Succeeded</button>
                 <button type="button" data-outcome="cracked">Cracked</button>
@@ -228,6 +224,6 @@
         <a href="/terms" target="_blank" rel="noopener noreferrer">Terms</a>
       </footer>
     </div>
-    <script src="/app.js?v=10"></script>
+    <script src="/app.js?v=11"></script>
   </body>
 </html>

@@ -248,8 +248,7 @@ function renderSummary(rows) {
 function renderDetail(row) {
   if (!row) {
     const label = productFilter === "masonry" ? "masonry lay-up" : "concrete slab";
-    detailEl.innerHTML = `<p class="empty-kicker">No ${escapeText(label)} checks yet</p>
-      <p>Run a ${escapeText(label)} ticket on the demo. This panel will show mix, metrics, and the event log.</p>`;
+    detailEl.innerHTML = `<p class="empty-kicker">No ${escapeText(label)} checks yet</p>`;
     return;
   }
 
