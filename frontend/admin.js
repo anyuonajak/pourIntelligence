@@ -172,27 +172,30 @@ function renderDetail(row) {
   const materialLabel = product === "masonry" ? "Mortar temp" : "Concrete temp";
   const kicker = product === "masonry" ? "Lay advisory" : "Pour advisory";
   const details = row.risk_factor_details || [];
+  const nogo = new Set(["EXTREME_EVAPORATION_RATE", "FREEZING_BEFORE_500_PSI", "HEAVY_RAIN_DURING_POUR", "MASONRY_BELOW_20F"]);
   const risks =
     details.length === 0
       ? `<li><strong>No risk factors triggered</strong>Forecast sat inside normal placement ranges.</li>`
       : details
-          .map(
-            (factor) =>
-              `<li><strong>${escapeText(factor.label)}</strong>${escapeText(factor.detail)}</li>`
-          )
+          .map((factor) => {
+            const severity = nogo.has(factor.code) ? "nogo" : "warn";
+            return `<li data-severity="${severity}"><strong>${escapeText(factor.label)}</strong>${escapeText(
+              factor.detail
+            )}</li>`;
+          })
           .join("");
 
   const fmtMetric = (value, suffix) => (value == null || value === "" ? "—" : `${value}${suffix || ""}`);
 
   detailEl.innerHTML = `
-    <div class="result-top">
-      <div class="stamp" data-status="${escapeText(row.go_no_go_status)}">
-        <span class="stamp-kicker">${kicker}</span>
-            <span class="stamp-status">${escapeText(String(row.go_no_go_status || "").replace("_", "-"))}</span>
-      </div>
+    <div class="result-head">
       <div class="result-meta">
+        <p class="stamp-kicker">${kicker}</p>
         <h2>${escapeText(row.location_name || row.zip_code || "Unknown site")}</h2>
         <p>${escapeText(fmt(row.pour_date))} · ${escapeText(mixLine(row))}</p>
+      </div>
+      <div class="stamp" data-status="${escapeText(row.go_no_go_status)}">
+        <span class="stamp-status">${escapeText(String(row.go_no_go_status || "").replace("_", "-"))}</span>
       </div>
     </div>
     <ul class="risk-list">${risks}</ul>
@@ -241,9 +244,9 @@ function renderCheckRows() {
     tr.dataset.id = row.id;
     if (row.id === selectedId) tr.classList.add("selected");
     const watch = watchState(row);
-    tr.innerHTML = `<td>${escapeText(fmt(row.created_at))}</td>
+    tr.innerHTML = `<td class="mono">${escapeText(fmt(row.created_at))}</td>
       <td>${escapeText(row.location_name || row.zip_code || "—")}</td>
-      <td><span class="pill" data-outcome="${watch === "watching" ? "pending" : "success"}">${watch}</span></td>
+      <td>${watch}</td>
       <td><span class="pill" data-status="${escapeText(row.go_no_go_status)}">${escapeText(
       row.go_no_go_status
     )}</span></td>

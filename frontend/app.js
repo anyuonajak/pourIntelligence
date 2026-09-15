@@ -16,7 +16,7 @@ const mitigationEl = document.querySelector("#mitigation");
 const disclaimerEl = document.querySelector("#disclaimer");
 const outcomeEl = document.querySelector("#outcome");
 const outcomeStatus = document.querySelector("#outcome-status");
-const presetButtons = document.querySelectorAll(".presets button");
+const presetButtons = document.querySelectorAll("#site-presets button");
 const watchEl = document.querySelector("#watch");
 const watchTitle = document.querySelector("#watch-title");
 const watchStatusEl = document.querySelector("#watch-status");
@@ -36,6 +36,7 @@ const COPY = {
   concrete: {
     heading: "Concrete slab ticket",
     sub: "Jobsite local time. Defaults are a typical Type I slab.",
+    workspace: "Concrete slab · ACI 305R / 306R",
     submit: "Check this pour",
     emptyKicker: "Waiting on a concrete ticket",
     emptyBody:
@@ -49,6 +50,7 @@ const COPY = {
   masonry: {
     heading: "Masonry ticket",
     sub: "Jobsite local time. TMS 602 / ACI 530.1 hot- and cold-weather masonry.",
+    workspace: "Masonry · TMS 602 / ACI 530.1",
     submit: "Check this lay-up",
     emptyKicker: "Waiting on a masonry ticket",
     emptyBody:
@@ -156,31 +158,32 @@ function renderWatchList() {
       watchRoster.length === 0
         ? "No watches yet. Submit a ticket to start one."
         : `No ${watchListFilter} watches.`;
-    watchListBody.innerHTML = `<li class="watch-list-empty">${empty}</li>`;
+    watchListBody.innerHTML = `<tr><td colspan="5" class="watch-list-empty">${empty}</td></tr>`;
     return;
   }
   watchListBody.innerHTML = "";
   rows.forEach((entry) => {
-    const item = document.createElement("li");
-    const card = document.createElement("div");
+    const item = document.createElement("tr");
     const state = watchEntryState(entry);
     const productLabel = entry.product === "masonry" ? "Masonry" : "Concrete";
     const stamp = entry.payload?.go_no_go_status || "—";
-    card.className = "watch-card";
-    if (entry.id === selectedWatchId) card.classList.add("selected");
-    if (entry.unread && entry.id !== selectedWatchId) card.classList.add("unread");
+    item.dataset.watchId = entry.id;
+    if (entry.id === selectedWatchId) item.classList.add("selected");
+    if (entry.unread && entry.id !== selectedWatchId) item.classList.add("unread");
     const closeControl =
       state === "closed"
         ? ""
         : `<button type="button" class="text-btn" data-close-id="${entry.id}">Close</button>`;
-    card.innerHTML = `<button type="button" class="watch-card-open" data-watch-id="${entry.id}">
-        <div class="watch-card-top">
-          <span class="watch-card-site">${entry.location || "Unknown site"}</span>
-          <span class="pill" data-status="${stamp}">${stamp.replace("_", "-")}</span>
-        </div>
-        <p class="watch-card-meta">${productLabel} · ${state} · ${entry.pourDateValue || "—"}</p>
-      </button>${closeControl}`;
-    item.append(card);
+    item.innerHTML = `<td class="mono">${String(entry.pourDateValue || "—").replace("T", " ")}</td>
+      <td>
+        <span class="site-cell">
+          <span class="site-name">${entry.location || "Unknown site"}</span>
+          <span class="site-meta">${productLabel}</span>
+        </span>
+      </td>
+      <td><span class="pill" data-status="${stamp}">${stamp.replace("_", "-")}</span></td>
+      <td>${state}</td>
+      <td>${closeControl}</td>`;
     watchListBody.append(item);
   });
 }
@@ -285,6 +288,8 @@ function applyProductChrome(product) {
   document.querySelector("#date-label").textContent = copy.dateLabel;
   document.querySelector("#chart-title").textContent = copy.chartTitle;
   document.querySelector("#outcome-kicker").textContent = copy.outcomeKicker;
+  const workspaceLabel = document.querySelector("#workspace-label");
+  if (workspaceLabel) workspaceLabel.textContent = copy.workspace;
   document.body.dataset.product = product;
   if (inFlightProduct === product) {
     submitBtn.disabled = true;
@@ -326,6 +331,7 @@ function renderChart(hourly) {
 
   destroyChart();
 
+  const tick = { color: "#5c6570", font: { family: "IBM Plex Sans, system-ui, sans-serif", size: 11 } };
   chart = new Chart(canvas, {
     type: "line",
     data: {
@@ -334,48 +340,64 @@ function renderChart(hourly) {
         {
           label: "Air °F",
           data: temps,
-          borderColor: "#1c1812",
+          borderColor: "#1c1e21",
           backgroundColor: "transparent",
-          tension: 0.25,
+          tension: 0.2,
+          borderWidth: 1.5,
+          pointRadius: 0,
           yAxisID: "y",
         },
         {
           label: "RH %",
           data: humidity,
-          borderColor: "#6f8f7a",
+          borderColor: "#5c6570",
           backgroundColor: "transparent",
           borderDash: [4, 4],
-          tension: 0.25,
+          tension: 0.2,
+          borderWidth: 1.25,
+          pointRadius: 0,
           yAxisID: "y",
         },
         {
           label: "Evap lb/ft²/hr",
           data: evaporation,
-          borderColor: "#b57914",
-          backgroundColor: "rgba(181, 121, 20, 0.12)",
+          borderColor: "#2f5d67",
+          backgroundColor: "rgba(47, 93, 103, 0.08)",
           fill: true,
-          tension: 0.25,
+          tension: 0.2,
+          borderWidth: 1.25,
+          pointRadius: 0,
           yAxisID: "yEvap",
         },
       ],
     },
     options: {
       responsive: true,
-      maintainAspectRatio: true,
+      maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       plugins: {
-        legend: { labels: { font: { family: "IBM Plex Mono", size: 11 } } },
+        legend: {
+          labels: { color: "#5c6570", boxWidth: 12, font: { family: "IBM Plex Sans, system-ui, sans-serif", size: 11 } },
+        },
       },
       scales: {
-        x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 10 } },
+        x: {
+          ticks: { ...tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
+          grid: { color: "#e8eaee" },
+          border: { color: "#d0d4dc" },
+        },
         y: {
-          title: { display: true, text: "°F / % RH" },
-          grid: { color: "rgba(28,24,18,0.08)" },
+          title: { display: true, text: "°F / % RH", color: "#5c6570", font: tick.font },
+          ticks: tick,
+          grid: { color: "#e8eaee" },
+          border: { color: "#d0d4dc" },
         },
         yEvap: {
           position: "right",
-          title: { display: true, text: "lb/ft²/hr" },
+          title: { display: true, text: "lb/ft²/hr", color: "#5c6570", font: tick.font },
+          ticks: tick,
           grid: { drawOnChartArea: false },
+          border: { color: "#d0d4dc" },
           suggestedMin: 0,
         },
       },
@@ -406,6 +428,7 @@ function paintResult(payload, pourDateValue) {
     details.forEach((factor) => {
       const item = document.createElement("li");
       if (NOGO_CODES.has(factor.code)) item.dataset.severity = "nogo";
+      else item.dataset.severity = "warn";
       item.innerHTML = `<strong>${factor.label}</strong>${factor.detail}`;
       riskList.append(item);
     });
@@ -754,7 +777,7 @@ presetButtons.forEach((button) => {
 });
 
 pourDateInput.value = defaultPourTime();
-document.querySelector('.presets button[data-zip="94612"]').classList.add("active");
+document.querySelector('#site-presets button[data-zip="94612"]').classList.add("active");
 form.addEventListener("submit", checkPour);
 
 document.querySelectorAll(".product-switch button").forEach((button) => {

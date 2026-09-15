@@ -7,21 +7,24 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/style.css?v=3" />
+    <link rel="stylesheet" href="/style.css?v=7" />
   </head>
   <body>
-    <div class="page">
-      <header class="masthead">
+    <header class="topbar">
+      <div class="topbar-inner">
         <div class="brand">
-          <p class="eyebrow">Internal</p>
-          <h1>Sign in</h1>
-          <p class="tagline">Checks, outcomes, and API keys.</p>
+          <a class="wordmark" href="/">Pour Intelligence</a>
+          <span class="product-sub">Admin sign-in</span>
         </div>
-      </header>
-      <section class="ticket" style="max-width: 360px">
+      </div>
+    </header>
+    <div class="page">
+      <section class="login-panel">
+        <p class="empty-kicker">Internal</p>
+        <h2>Sign in</h2>
         <form id="login-form">
           <label>
             Username
@@ -31,7 +34,7 @@
             Password
             <input id="password" name="password" type="password" autocomplete="current-password" required />
           </label>
-          <button type="submit" id="login-btn">Enter</button>
+          <button type="submit" id="login-btn" class="btn-primary">Enter</button>
           <p id="login-error" class="form-error" hidden></p>
         </form>
       </section>

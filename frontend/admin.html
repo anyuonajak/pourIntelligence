@@ -7,36 +7,40 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/style.css?v=4" />
+    <link rel="stylesheet" href="/style.css?v=7" />
   </head>
   <body>
-    <div class="page">
-      <header class="masthead">
+    <header class="topbar">
+      <div class="topbar-inner">
         <div class="brand">
-          <p class="eyebrow">Internal</p>
-          <h1>Admin</h1>
-          <p class="tagline">Pick a product and a watch filter. Inspect the stored calculation.</p>
+          <a class="wordmark" href="/">Pour Intelligence</a>
+          <span class="product-sub">Admin</span>
         </div>
-        <button type="button" id="logout-btn" class="text-btn">Sign out</button>
-      </header>
+        <div class="topbar-actions">
+          <nav class="admin-tabs" role="tablist">
+            <button type="button" class="active" data-tab="checks">Checks</button>
+            <button type="button" data-tab="keys">API keys</button>
+          </nav>
+          <button type="button" id="logout-btn" class="text-btn">Sign out</button>
+        </div>
+      </div>
+    </header>
 
-      <nav class="admin-tabs" role="tablist">
-        <button type="button" class="active" data-tab="checks">Checks vs outcomes</button>
-        <button type="button" data-tab="keys">API keys</button>
-      </nav>
-
+    <div class="page">
       <section id="tab-checks">
-        <div class="product-switch" id="product-filter" role="group" aria-label="Product">
-          <button type="button" class="active" data-filter="concrete">Concrete slab</button>
-          <button type="button" data-filter="masonry">Masonry</button>
-        </div>
-        <div class="presets" id="watch-filter" role="group" aria-label="Watch status">
-          <button type="button" class="active" data-watch="watching">Watching</button>
-          <button type="button" data-watch="closed">Closed</button>
-          <button type="button" data-watch="all">All</button>
+        <div class="admin-toolbar">
+          <div class="product-switch" id="product-filter" role="group" aria-label="Product">
+            <button type="button" class="active" data-filter="concrete">Concrete</button>
+            <button type="button" data-filter="masonry">Masonry</button>
+          </div>
+          <div class="filter-tabs" id="watch-filter" role="group" aria-label="Watch status">
+            <button type="button" class="active" data-watch="watching">Watching</button>
+            <button type="button" data-watch="closed">Closed</button>
+            <button type="button" data-watch="all">All</button>
+          </div>
         </div>
         <p class="workspace-note" id="workspace-note">Concrete slab · ACI 305R / 306R</p>
         <dl class="metrics" id="summary"></dl>
@@ -68,7 +72,7 @@
       </section>
 
       <section id="tab-keys" hidden>
-        <form id="key-form" class="ticket key-form">
+        <form id="key-form" class="panel key-form">
           <label>
             Key name
             <input id="key-name" name="name" placeholder="QuoteIQ sandbox" required />
@@ -100,6 +104,6 @@
         </div>
       </section>
     </div>
-    <script src="/admin.js?v=6"></script>
+    <script src="/admin.js?v=8"></script>
   </body>
 </html>
