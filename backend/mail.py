@@ -88,6 +88,26 @@ def render_alert_html(
     return wrap_email("Pour Intelligence", body, unsubscribe_url(unsub_token))
 
 
+def render_watch_started_html(
+    *,
+    location: str,
+    product: str,
+    status: str,
+    pour_date: str,
+    unsub_token: str | None,
+) -> str:
+    body = (
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
+        'style="border-collapse:collapse;border:1px solid #ecece8;">'
+        f'{_fact_row("Site", location)}'
+        f'{_fact_row("Window", pour_date)}'
+        f'{_fact_row("Status", status)}'
+        f'{_fact_row("Product", product)}'
+        "</table>"
+    )
+    return wrap_email("Watching", body, unsubscribe_url(unsub_token))
+
+
 def render_digest_html(*, sites: list[dict[str, Any]], unsub_token: str | None) -> str:
     header = (
         "<tr>"

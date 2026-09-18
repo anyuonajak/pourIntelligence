@@ -326,6 +326,11 @@ def test_demo_close_uses_check_id_from_readiness():
     assert "/v1/pour-watch/${checkId}/close" in js
     assert "isPersistedCheckId" in js
     assert "local-" in js
+    assert "resetComposer" in js
+    page = client.get("/").text
+    assert 'id="outcome"' not in page
+    assert "How did this pour go" not in page
+    assert "How did this pour go" not in js
 
 
 def test_freeze_line_crossing_is_material():

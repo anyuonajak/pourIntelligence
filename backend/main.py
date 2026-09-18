@@ -26,7 +26,7 @@ from .db import (
 from .formulas import evaluate_pour
 from .formulas_masonry import evaluate_masonry
 from .jobs import router as jobs_router
-from .notify import send_watch_alerts
+from .notify import send_watch_alerts, send_watch_started
 from .rate_limit import limiter
 from .schemas import (
     LocationInfo,
@@ -188,6 +188,7 @@ async def pour_readiness(request: Request, body: PourReadinessRequest) -> PourRe
         stored_mix = body.mix_design.model_dump(mode="json")
     stored_mix["product"] = body.product.value
 
+    subscriber = None
     subscriber_id = None
     if body.email:
         subscriber = upsert_subscriber(body.email)
@@ -226,6 +227,20 @@ async def pour_readiness(request: Request, body: PourReadinessRequest) -> PourRe
         result["go_no_go_status"].value,
         check_id,
     )
+
+    if check_id and watching and subscriber:
+        try:
+            await send_watch_started(
+                check_id=check_id,
+                subscriber=subscriber,
+                watching=watching,
+                location_name=name,
+                product=body.product.value,
+                status=result["go_no_go_status"].value,
+                pour_date=body.pour_date,
+            )
+        except Exception:
+            logger.exception("watch-started send failed check_id=%s", check_id)
 
     return PourReadinessResponse(
         product=body.product,

@@ -12,8 +12,6 @@ const resultKicker = document.querySelector("#result-kicker");
 const resultLocation = document.querySelector("#result-location");
 const resultWhen = document.querySelector("#result-when");
 const metricsEl = document.querySelector("#metrics");
-const outcomeEl = document.querySelector("#outcome");
-const outcomeStatus = document.querySelector("#outcome-status");
 const presetButtons = document.querySelectorAll("#site-presets button");
 const watchEl = document.querySelector("#watch");
 const watchTitle = document.querySelector("#watch-title");
@@ -38,7 +36,6 @@ const COPY = {
     submit: "Check this pour",
     emptyKicker: "Waiting on a concrete ticket",
     dateLabel: "Pour date & time",
-    outcomeKicker: "How did this pour go?",
     chartTitle: "Pour window · 48 hours",
     checking: "Checking forecast…",
     error: "Could not check this pour.",
@@ -50,7 +47,6 @@ const COPY = {
     submit: "Check this lay-up",
     emptyKicker: "Waiting on a masonry ticket",
     dateLabel: "Lay-up date & time",
-    outcomeKicker: "How did this lay-up go?",
     chartTitle: "Lay-up window · 48 hours",
     checking: "Checking forecast…",
     error: "Could not check this lay-up.",
@@ -58,7 +54,6 @@ const COPY = {
 };
 
 let chart;
-let currentCheckId = null;
 let currentProduct = "concrete";
 let inFlightProduct = null;
 const lastByProduct = { concrete: null, masonry: null };
@@ -233,6 +228,27 @@ function defaultPourTime() {
   )}:${pad(date.getMinutes())}`;
 }
 
+const DEFAULT_ZIP = "94612";
+
+function resetComposer(product) {
+  zipInput.value = DEFAULT_ZIP;
+  pourDateInput.value = defaultPourTime();
+  presetButtons.forEach((item) => {
+    item.classList.toggle("active", item.dataset.zip === DEFAULT_ZIP);
+  });
+  if (product === "masonry") {
+    document.querySelector("#unit-type").value = "CMU";
+    document.querySelector("#mortar-type").value = "Type_N";
+    document.querySelector("#mortar-temp").value = "";
+  } else {
+    document.querySelector("#cement").value = "Type_I";
+    document.querySelector("#psi").value = "4000";
+    document.querySelector("#thickness").value = "4";
+    document.querySelector("#concrete-temp").value = "";
+  }
+  loadNotifyEmail();
+}
+
 function showError(message) {
   formError.hidden = !message;
   formError.textContent = message || "";
@@ -261,16 +277,12 @@ function destroyChart() {
 }
 
 function clearResultPanel() {
-  currentCheckId = null;
   stamp.dataset.status = "";
   stampStatus.textContent = "";
   resultKicker.textContent = "";
   resultLocation.textContent = "";
   resultWhen.textContent = "";
   metricsEl.innerHTML = "";
-  outcomeStatus.hidden = true;
-  outcomeStatus.textContent = "";
-  outcomeEl.hidden = true;
   watchEl.hidden = true;
   watchLog.innerHTML = "";
   destroyChart();
@@ -296,7 +308,6 @@ function applyProductChrome(product) {
   document.querySelector("#ticket-sub").textContent = copy.sub;
   document.querySelector("#date-label").textContent = copy.dateLabel;
   document.querySelector("#chart-title").textContent = copy.chartTitle;
-  document.querySelector("#outcome-kicker").textContent = copy.outcomeKicker;
   const workspaceLabel = document.querySelector("#workspace-label");
   if (workspaceLabel) workspaceLabel.textContent = copy.workspace;
   document.body.dataset.product = product;
@@ -466,14 +477,6 @@ function paintResult(payload, pourDateValue) {
   }
   metricsEl.append(...items);
   renderChart(payload.hourly || []);
-
-  currentCheckId = payload.check_id || null;
-  outcomeStatus.hidden = true;
-  outcomeStatus.textContent = "";
-  outcomeEl.hidden = !currentCheckId;
-  outcomeEl.querySelectorAll("button").forEach((button) => {
-    button.disabled = false;
-  });
 }
 
 function cacheResult(product, payload, pourDateValue) {
@@ -869,6 +872,9 @@ async function checkPour(event) {
       paintResult(payload, pourDate);
     }
     startWatch(product, payload, body, pourDate);
+    if (currentProduct === product) {
+      resetComposer(product);
+    }
   } catch (error) {
     if (currentProduct === product) {
       showError(error.message || copy.error);
@@ -893,7 +899,7 @@ presetButtons.forEach((button) => {
 });
 
 pourDateInput.value = defaultPourTime();
-document.querySelector('#site-presets button[data-zip="94612"]').classList.add("active");
+document.querySelector(`#site-presets button[data-zip="${DEFAULT_ZIP}"]`).classList.add("active");
 form.addEventListener("submit", checkPour);
 
 document.querySelectorAll(".product-switch button").forEach((button) => {
@@ -919,34 +925,6 @@ watchListBody.addEventListener("click", (event) => {
   const button = event.target.closest("[data-watch-id]");
   if (!button) return;
   openWatch(button.dataset.watchId);
-});
-
-document.querySelectorAll("#outcome button").forEach((button) => {
-  button.addEventListener("click", async () => {
-    if (!currentCheckId) return;
-    outcomeEl.querySelectorAll("button").forEach((item) => {
-      item.disabled = true;
-    });
-    try {
-      const response = await fetch("/v1/pour-outcomes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ check_id: currentCheckId, outcome: button.dataset.outcome }),
-      });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.detail || response.statusText);
-      }
-      outcomeStatus.hidden = false;
-      outcomeStatus.textContent = "Recorded. That helps validate the model.";
-    } catch (error) {
-      outcomeEl.querySelectorAll("button").forEach((item) => {
-        item.disabled = false;
-      });
-      outcomeStatus.hidden = false;
-      outcomeStatus.textContent = error.message || "Could not save that outcome.";
-    }
-  });
 });
 
 loadWatchRoster();

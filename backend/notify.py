@@ -8,12 +8,13 @@ from typing import Any, Optional
 from uuid import UUID
 
 from .db import mark_events_emailed, set_last_digest_at
-from .mail import render_alert_html, render_digest_html, send_email
+from .mail import render_alert_html, render_digest_html, render_watch_started_html, send_email
 from .watch import pending_alert_events
 
 logger = logging.getLogger("pourintelligence")
 
 DIGEST_MIN_AGE = timedelta(hours=20)
+_WATCH_STARTED_SENT: set[str] = set()
 
 
 def _parse_dt(value: Any) -> Optional[datetime]:
@@ -88,6 +89,48 @@ def group_digest_sites(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
         )
         bucket["sites"].append(site_snapshot(row))
     return {key: value for key, value in grouped.items() if value["sites"]}
+
+
+async def send_watch_started(
+    *,
+    check_id: UUID | str | None,
+    subscriber: dict[str, Any] | None,
+    watching: bool,
+    location_name: str,
+    product: str,
+    status: str,
+    pour_date: Any,
+    watch_events: list[dict[str, Any]] | None = None,
+) -> bool:
+    """Confirm a new open watch. One send per check_id; never raises to the caller."""
+    if not watching or not check_id or not subscriber:
+        return False
+    email = subscriber.get("email")
+    if not email:
+        return False
+    key = str(check_id)
+    if key in _WATCH_STARTED_SENT:
+        return False
+    for event in watch_events or []:
+        if isinstance(event, dict) and event.get("code") == "WATCH_STARTED" and event.get("emailed") is True:
+            _WATCH_STARTED_SENT.add(key)
+            return False
+    location = location_name or "site"
+    html_body = render_watch_started_html(
+        location=location,
+        product=product_label(product),
+        status=str(status or "—"),
+        pour_date=fmt_window(pour_date),
+        unsub_token=subscriber.get("unsub_token"),
+    )
+    try:
+        sent = await send_email(email, f"Watching · {location}", html_body)
+    except Exception:
+        logger.exception("watch-started send failed check_id=%s", check_id)
+        return False
+    if sent:
+        _WATCH_STARTED_SENT.add(key)
+    return sent
 
 
 async def send_watch_alerts(
