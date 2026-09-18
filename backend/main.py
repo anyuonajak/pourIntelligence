@@ -4,7 +4,6 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
-from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,9 +21,12 @@ from .db import (
     lookup_api_key,
     record_watch_poll,
     set_watching,
+    upsert_subscriber,
 )
 from .formulas import evaluate_pour
 from .formulas_masonry import evaluate_masonry
+from .jobs import router as jobs_router
+from .notify import send_watch_alerts
 from .rate_limit import limiter
 from .schemas import (
     LocationInfo,
@@ -36,7 +38,7 @@ from .schemas import (
     PourWatchResponse,
     ProductType,
 )
-from .watch import diff_forecast, is_watch_open, watch_until
+from .watch import diff_forecast, is_watch_open, jobsite_now, watch_until
 from .weather import fetch_hourly, resolve_location
 
 logging.basicConfig(
@@ -63,10 +65,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Request-ID"],
+    allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Request-ID", "X-Jobs-Secret"],
 )
 app.add_middleware(SessionMiddleware, secret_key=settings.session_secret, same_site="lax", https_only=False)
 app.include_router(admin_router)
+app.include_router(jobs_router)
 
 
 def _client_ip(request: Request) -> str:
@@ -81,13 +84,7 @@ def _request_id(request: Request) -> str:
 
 
 def _jobsite_now(tz_name: str | None) -> datetime:
-    """Jobsite-local wall clock, to compare against a naive pour_date."""
-    if tz_name:
-        try:
-            return datetime.now(ZoneInfo(tz_name)).replace(tzinfo=None)
-        except Exception:
-            logger.warning("unknown timezone %s; falling back to UTC", tz_name)
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return jobsite_now(tz_name)
 
 
 async def _evaluate(body: PourReadinessRequest, lat: float, lon: float, cache_ttl_minutes: int | None = None):
@@ -191,6 +188,12 @@ async def pour_readiness(request: Request, body: PourReadinessRequest) -> PourRe
         stored_mix = body.mix_design.model_dump(mode="json")
     stored_mix["product"] = body.product.value
 
+    subscriber_id = None
+    if body.email:
+        subscriber = upsert_subscriber(body.email)
+        if subscriber:
+            subscriber_id = subscriber.get("id")
+
     check_id = insert_pour_check(
         {
             "request_id": _request_id(request),
@@ -213,6 +216,7 @@ async def pour_readiness(request: Request, body: PourReadinessRequest) -> PourRe
             "location": {"name": name, "latitude": lat, "longitude": lon, "timezone": tz_name},
             "watching": watching,
             "last_checked_at": datetime.now(timezone.utc).isoformat(),
+            "subscriber_id": subscriber_id,
         }
     )
 
@@ -287,8 +291,9 @@ async def pour_watch(request: Request, body: PourWatchRequest) -> PourWatchRespo
         metrics=metrics,
     )
 
+    stamped: list = []
     if body.check_id and stored is not None:
-        record_watch_poll(
+        stamped = record_watch_poll(
             body.check_id,
             status=status,
             risk_factors=risk_factors,
@@ -298,7 +303,19 @@ async def pour_watch(request: Request, body: PourWatchRequest) -> PourWatchRespo
             new_events=changes,
             prior_events=prior_events,
             watching=watching,
-        )
+        ) or []
+        try:
+            await send_watch_alerts(
+                check_id=body.check_id,
+                stored=stored,
+                events=[*prior_events, *stamped],
+                status=status,
+                location_name=name,
+                product=body.product.value,
+                pour_date=body.pour_date,
+            )
+        except Exception:
+            logger.exception("watch alert send failed check_id=%s", body.check_id)
 
     if changes:
         logger.info(

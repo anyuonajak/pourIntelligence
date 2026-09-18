@@ -6,13 +6,15 @@ This is an advisory tool, not a substitute for project specifications or the eng
 
 ## What is in this MVP
 
-- `POST /v1/pour-readiness` — location + pour time + mix → readiness score
+- `POST /v1/pour-readiness` — location + pour time + mix → readiness score (optional `email` for alerts/digest)
+- Open-Meteo hourly forecast (no API key)
 - Open-Meteo hourly forecast (no API key)
 - Uno / Menzel evaporation rate (ACI 305R nomograph equation)
 - Cold-weather and freezing checks (ACI 306R)
 - Simplified Nurse-Saul maturity for time-to-500-psi and 70% strength
 - A single-page demo UI served from the same app
 - `POST /v1/pour-watch` — re-checks a submitted ticket and reports only material forecast moves
+- `POST /internal/jobs/watch-tick` / `daily-digest` — server-side poll and digest mail (see Email and jobs)
 - Watch roster on the demo and in `/admin` (watching / paused / closed)
 - `POST /v1/pour-outcomes` — success / cracked / delayed / other, tied to a check
 - Supabase Postgres (checks, outcomes, weather cache, API keys)
@@ -73,11 +75,51 @@ heartbeat (`last checked …, no material change`).
 The watch closes at pour time plus the protection period (24–48h). Changes are appended to `watch_events` on the check
 and shown in `/admin`.
 
-Browser polling only runs while the page is open. Push delivery (SMS, email, webhooks) and a server-side scheduler are
-not built yet — Render's free web service sleeps, so background monitoring needs a worker or a Supabase cron.
+Browser polling only runs while the page is open. Critical alert mail and a daily digest run from
+server-side job endpoints so overnight watches still notify when the tab is closed.
 
 `WATCH_POLL_SECONDS` (default 180) sets the heartbeat, `WATCH_WEATHER_CACHE_MINUTES` (default 10) how fresh the forecast
 must be on a watch poll, and `WATCH_RATE_LIMIT_PER_HOUR` (default 240) the demo poll quota.
+
+## Email and jobs
+
+Optional email on the demo ticket (or `email` on `POST /v1/pour-readiness`) upserts a `watch_subscribers` row and
+attaches it to the check. Same address on later tickets shares one digest. There are no user accounts.
+
+- Instant mail: status flip to `NO_GO` or `WARNING`, `CROSS_32`, or a critical no-go risk
+  (`EXTREME_EVAPORATION_RATE`, `FREEZING_BEFORE_500_PSI`, `HEAVY_RAIN_DURING_POUR`, `MASONRY_BELOW_20F`). Metric
+  heartbeats are not emailed.
+- Daily digest: one snapshot per subscriber with at least one open (`watching=true`) check.
+- `GET /v1/unsubscribe?token=…` turns off alerts and the digest. Every mail includes this link.
+- Pause in the demo is browser-only. Jobs follow `watching=true` in the database.
+
+Set these on Render (and locally in `.env`):
+
+| Var | Purpose |
+| --- | --- |
+| `RESEND_API_KEY` | Resend HTTP API key. If missing, mail is skipped and pour/watch still succeed. |
+| `ALERT_FROM_EMAIL` | From header. Use `Pour Intelligence <onboarding@resend.dev>` until a domain is verified. |
+| `PUBLIC_BASE_URL` | Origin for unsubscribe links, e.g. `https://pourintelligence.onrender.com` |
+| `JOBS_SECRET` | Shared secret for job POSTs |
+
+Hit the jobs with any external cron (cron-job.org, GitHub Actions, or Render Cron). The free web service sleeps, so
+something outside the browser has to wake it:
+
+```bash
+# every few minutes
+curl -sS -X POST "$PUBLIC_BASE_URL/internal/jobs/watch-tick" \
+  -H "X-Jobs-Secret: $JOBS_SECRET"
+
+# once a day
+curl -sS -X POST "$PUBLIC_BASE_URL/internal/jobs/daily-digest" \
+  -H "X-Jobs-Secret: $JOBS_SECRET"
+```
+
+`watch-tick` re-evaluates up to 50 open watches (stale first) and sends critical alerts.
+`daily-digest` sends one snapshot per eligible subscriber (skipped if a digest went out in the last ~20 hours).
+
+Until a domain is verified in Resend, send from `Pour Intelligence <onboarding@resend.dev>` (Resend’s test sender).
+Swap `ALERT_FROM_EMAIL` to your domain later. Do not commit `RESEND_API_KEY`.
 
 ## Deploy
 
@@ -91,7 +133,7 @@ Health check: `GET /health`.
 
 ## Supabase
 
-1. Run `supabase/migrations/001_init.sql`, then `002_product.sql`, then `003_watch.sql` in the Supabase SQL editor.
+1. Run `supabase/migrations/001_init.sql`, then `002_product.sql`, then `003_watch.sql`, then `004_notifications.sql` in the Supabase SQL editor.
 2. Set env vars (Render already has `project_url` and `service_role`; those names work). Preferred names: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 3. Optional: `ALLOWED_ORIGINS=https://pourintelligence.onrender.com`
 4. Set `ADMIN_PASSWORD` (and optionally `ADMIN_USERNAME`, `SESSION_SECRET`) on Render.

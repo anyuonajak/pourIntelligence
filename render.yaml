@@ -6,3 +6,10 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
+    # Set in the Render dashboard (do not commit secrets):
+    #   JOBS_SECRET, RESEND_API_KEY, ALERT_FROM_EMAIL, PUBLIC_BASE_URL
+    # External cron (cron-job.org, GitHub Actions, or Render Cron) should:
+    #   POST /internal/jobs/watch-tick every few minutes
+    #   POST /internal/jobs/daily-digest once a day
+    #   Header: X-Jobs-Secret: $JOBS_SECRET
+    # Free Render web services sleep; the browser poll is not enough for overnight mail.

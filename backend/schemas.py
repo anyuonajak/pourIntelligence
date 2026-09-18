@@ -1,9 +1,12 @@
+import re
 from datetime import datetime
 from enum import Enum
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class CementType(str, Enum):
@@ -60,6 +63,23 @@ class PourReadinessRequest(BaseModel):
         default=None,
         description="Fresh concrete or mortar temperature. If omitted, approximated as air temperature + 5°F.",
     )
+    email: Optional[str] = Field(
+        default=None,
+        max_length=254,
+        description="Optional address for critical alerts and the daily digest.",
+    )
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: object) -> Optional[str]:
+        if value is None:
+            return None
+        text = str(value).strip().lower()
+        if not text:
+            return None
+        if len(text) > 254 or not _EMAIL_RE.fullmatch(text):
+            raise ValueError("Provide a valid email or leave it blank.")
+        return text
 
     @model_validator(mode="after")
     def require_a_location(self) -> "PourReadinessRequest":

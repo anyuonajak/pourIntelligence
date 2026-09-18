@@ -1,5 +1,6 @@
 const form = document.querySelector("#pour-form");
 const zipInput = document.querySelector("#zip");
+const emailInput = document.querySelector("#notify-email");
 const pourDateInput = document.querySelector("#pour-date");
 const submitBtn = document.querySelector("#submit-btn");
 const formError = document.querySelector("#form-error");
@@ -78,6 +79,7 @@ function newWatch() {
 
 const watchByProduct = { concrete: newWatch(), masonry: newWatch() };
 const WATCH_STORE_KEY = "pi_watches_v1";
+const EMAIL_STORE_KEY = "pi_notify_email";
 const WATCH_STORE_MAX = 20;
 let watchRoster = [];
 let selectedWatchId = null;
@@ -121,6 +123,27 @@ function persistWatchRoster() {
     localStorage.setItem(WATCH_STORE_KEY, JSON.stringify(slim));
   } catch {
     /* quota or private mode */
+  }
+}
+
+function loadNotifyEmail() {
+  if (!emailInput) return;
+  try {
+    const saved = localStorage.getItem(EMAIL_STORE_KEY);
+    if (saved) emailInput.value = saved;
+  } catch {
+    /* private mode */
+  }
+}
+
+function persistNotifyEmail() {
+  if (!emailInput) return;
+  try {
+    const value = emailInput.value.trim();
+    if (value) localStorage.setItem(EMAIL_STORE_KEY, value);
+    else localStorage.removeItem(EMAIL_STORE_KEY);
+  } catch {
+    /* private mode */
   }
 }
 
@@ -804,11 +827,14 @@ async function checkPour(event) {
 
   const zip = zipInput.value.trim();
   const pourDate = pourDateInput.value;
+  persistNotifyEmail();
   const body = {
     product,
     zip_code: zip,
     pour_date: `${pourDate}:00`,
   };
+  const email = (emailInput?.value || "").trim();
+  if (email) body.email = email;
   if (product === "masonry") {
     body.masonry_design = {
       unit_type: document.querySelector("#unit-type").value,
@@ -924,5 +950,6 @@ document.querySelectorAll("#outcome button").forEach((button) => {
 });
 
 loadWatchRoster();
+loadNotifyEmail();
 renderWatchList();
 selectProduct("concrete");

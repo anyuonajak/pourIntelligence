@@ -36,6 +36,10 @@ class Settings:
     admin_username: str
     admin_password: str | None
     session_secret: str
+    resend_api_key: str | None
+    alert_from_email: str | None
+    jobs_secret: str | None
+    public_base_url: str | None
 
     @property
     def supabase_configured(self) -> bool:
@@ -65,4 +69,8 @@ def get_settings() -> Settings:
         admin_username=_first("ADMIN_USERNAME") or "admin",
         admin_password=_first("ADMIN_PASSWORD"),
         session_secret=session_secret,
+        resend_api_key=_first("RESEND_API_KEY"),
+        alert_from_email=_first("ALERT_FROM_EMAIL"),
+        jobs_secret=_first("JOBS_SECRET"),
+        public_base_url=(_first("PUBLIC_BASE_URL") or "").rstrip("/") or None,
     )

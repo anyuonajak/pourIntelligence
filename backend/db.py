@@ -111,13 +111,17 @@ def insert_pour_check(row: dict[str, Any]) -> Optional[UUID]:
         try:
             client.table("pour_checks").insert(payload).execute()
         except Exception:
-            payload.pop("watching", None)
-            payload.pop("last_checked_at", None)
+            payload.pop("subscriber_id", None)
             try:
                 client.table("pour_checks").insert(payload).execute()
             except Exception:
-                payload.pop("product", None)
-                client.table("pour_checks").insert(payload).execute()
+                payload.pop("watching", None)
+                payload.pop("last_checked_at", None)
+                try:
+                    client.table("pour_checks").insert(payload).execute()
+                except Exception:
+                    payload.pop("product", None)
+                    client.table("pour_checks").insert(payload).execute()
         return UUID(str(check_id))
     except Exception:
         logger.exception("pour_check insert failed")
@@ -157,12 +161,15 @@ def _flatten_outcome(row: dict[str, Any]) -> Optional[dict[str, Any]]:
 
 
 _CHECK_CORE = (
-    "id,created_at,source,zip_code,go_no_go_status,risk_factors,location,pour_date,"
-    "mix_design,metrics,predictions,recommended_mitigation,concrete_temp_f,"
+    "id,created_at,source,zip_code,address,latitude,longitude,go_no_go_status,risk_factors,"
+    "location,pour_date,mix_design,metrics,predictions,recommended_mitigation,concrete_temp_f,"
     "pour_outcomes(outcome,notes,created_at)"
 )
+_SUBSCRIBER_JOIN = "watch_subscribers(id,email,unsub_token,alerts_enabled,digest_enabled,last_digest_at)"
 # Newest columns first; each fallback drops a migration the database may not have run yet.
 CHECK_SELECTS = (
+    f"{_CHECK_CORE},product,watching,last_checked_at,watch_events,subscriber_id,{_SUBSCRIBER_JOIN}",
+    f"{_CHECK_CORE},product,watching,last_checked_at,watch_events,subscriber_id",
     f"{_CHECK_CORE},product,watching,last_checked_at,watch_events",
     f"{_CHECK_CORE},product",
     _CHECK_CORE,
@@ -183,17 +190,36 @@ def _risk_details(codes: Any, product: str) -> list[dict[str, str]]:
     return details
 
 
+def _subscriber_record(row: dict[str, Any]) -> Optional[dict[str, Any]]:
+    sub = row.get("watch_subscribers")
+    if isinstance(sub, list):
+        sub = sub[0] if sub else None
+    if isinstance(sub, dict) and sub:
+        return sub
+    return None
+
+
 def serialize_check(row: dict[str, Any]) -> dict[str, Any]:
     outcome = _flatten_outcome(row)
     location = row.get("location") if isinstance(row.get("location"), dict) else {}
     mix = row.get("mix_design") if isinstance(row.get("mix_design"), dict) else {}
     product = row.get("product") or mix.get("product") or "concrete"
+    subscriber = _subscriber_record(row)
+    latitude = row.get("latitude")
+    longitude = row.get("longitude")
+    if latitude is None:
+        latitude = location.get("latitude")
+    if longitude is None:
+        longitude = location.get("longitude")
     return {
         "id": row.get("id"),
         "created_at": row.get("created_at"),
         "source": row.get("source"),
         "product": product,
         "zip_code": row.get("zip_code"),
+        "address": row.get("address"),
+        "latitude": latitude,
+        "longitude": longitude,
         "location_name": location.get("name") if location else None,
         "pour_date": row.get("pour_date"),
         "go_no_go_status": row.get("go_no_go_status"),
@@ -210,7 +236,16 @@ def serialize_check(row: dict[str, Any]) -> dict[str, Any]:
         "watching": bool(row.get("watching")),
         "last_checked_at": row.get("last_checked_at"),
         "watch_events": row.get("watch_events") if isinstance(row.get("watch_events"), list) else [],
+        "subscriber_id": row.get("subscriber_id") or (subscriber or {}).get("id"),
+        "subscriber_email": (subscriber or {}).get("email"),
     }
+
+
+def hydrate_watch_row(row: dict[str, Any]) -> dict[str, Any]:
+    """serialize_check plus the subscriber record used for mail (includes unsub_token)."""
+    out = serialize_check(row)
+    out["subscriber"] = _subscriber_record(row)
+    return out
 
 
 def list_checks(limit: int = 200) -> list[dict[str, Any]]:
@@ -253,7 +288,7 @@ def get_check_for_watch(check_id: UUID) -> Optional[dict[str, Any]]:
         rows = result.data or []
         if not rows:
             return None
-        return serialize_check(rows[0])
+        return hydrate_watch_row(rows[0])
     logger.error("get_check_for_watch failed for every known column set")
     return None
 
@@ -278,11 +313,11 @@ def record_watch_poll(
     new_events: list[dict[str, Any]],
     prior_events: list[dict[str, Any]],
     watching: bool,
-) -> None:
+) -> list[dict[str, Any]]:
     """Store the latest evaluation and append any material changes."""
     client = get_client()
     if client is None:
-        return
+        return []
     checked_at = datetime.now(timezone.utc).isoformat()
     payload: dict[str, Any] = {
         "go_no_go_status": status,
@@ -297,15 +332,19 @@ def record_watch_poll(
     if not watching:
         payload["watching"] = False
     if new_events:
-        stamped = [{**event, "at": checked_at} for event in new_events]
+        stamped = [{**event, "at": checked_at, "emailed": False} for event in new_events]
         payload["watch_events"] = ([*prior_events, *stamped])[-50:]
+    written = False
     for attempt in (payload, {key: payload[key] for key in payload if key in _CHECK_WRITE_FALLBACK}):
         try:
             client.table("pour_checks").update(attempt).eq("id", str(check_id)).execute()
-            return
+            written = True
+            break
         except Exception:
             logger.warning("watch update failed, retrying without watch columns")
-    logger.error("record_watch_poll failed")
+    if not written:
+        logger.error("record_watch_poll failed")
+    return stamped if new_events else []
 
 
 def set_watching(check_id: UUID, watching: bool, event: dict[str, Any] | None = None) -> bool:
@@ -330,6 +369,149 @@ def set_watching(check_id: UUID, watching: bool, event: dict[str, Any] | None = 
             logger.warning("set_watching failed, retrying without optional columns")
     logger.error("set_watching failed")
     return False
+
+
+WATCH_TICK_BATCH = 50
+
+
+def list_open_watches(limit: int = WATCH_TICK_BATCH) -> list[dict[str, Any]]:
+    """Open watches, oldest last_checked_at first, for the server-side tick."""
+    client = get_client()
+    if client is None:
+        return []
+    for select in CHECK_SELECTS:
+        try:
+            result = (
+                client.table("pour_checks")
+                .select(select)
+                .eq("watching", True)
+                .order("last_checked_at", desc=False, nullsfirst=True)
+                .limit(limit)
+                .execute()
+            )
+        except Exception:
+            logger.warning("list_open_watches select failed, trying an older column set")
+            continue
+        return [hydrate_watch_row(row) for row in result.data or []]
+    logger.error("list_open_watches failed for every known column set")
+    return []
+
+
+def list_watching_subscribed(limit: int = 500) -> list[dict[str, Any]]:
+    """Open watches that have a subscriber, for the daily digest."""
+    client = get_client()
+    if client is None:
+        return []
+    for select in CHECK_SELECTS:
+        try:
+            result = (
+                client.table("pour_checks")
+                .select(select)
+                .eq("watching", True)
+                .order("created_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+        except Exception:
+            logger.warning("list_watching_subscribed select failed, trying an older column set")
+            continue
+        rows = []
+        for row in result.data or []:
+            hydrated = hydrate_watch_row(row)
+            if hydrated.get("subscriber_id") and hydrated.get("subscriber"):
+                rows.append(hydrated)
+        return rows
+    logger.error("list_watching_subscribed failed for every known column set")
+    return []
+
+
+def upsert_subscriber(email: str) -> Optional[dict[str, Any]]:
+    client = get_client()
+    if client is None or not email:
+        return None
+    cleaned = email.strip().lower()
+    columns = "id,email,unsub_token,alerts_enabled,digest_enabled,last_digest_at"
+
+    def _lookup() -> Optional[dict[str, Any]]:
+        found = (
+            client.table("watch_subscribers").select(columns).eq("email", cleaned).limit(1).execute()
+        )
+        rows = found.data or []
+        return rows[0] if rows else None
+
+    try:
+        existing = _lookup()
+        if existing:
+            return existing
+        row = {
+            "email": cleaned,
+            "unsub_token": secrets.token_urlsafe(24),
+            "alerts_enabled": True,
+            "digest_enabled": True,
+        }
+        created = client.table("watch_subscribers").insert(row).execute()
+        return (created.data or [row])[0]
+    except Exception:
+        logger.exception("subscriber upsert failed")
+        try:
+            return _lookup()
+        except Exception:
+            logger.exception("subscriber re-select failed")
+            return None
+
+
+def unsubscribe_by_token(token: str) -> Optional[dict[str, Any]]:
+    client = get_client()
+    if client is None or not token:
+        return None
+    try:
+        result = (
+            client.table("watch_subscribers")
+            .update({"alerts_enabled": False, "digest_enabled": False})
+            .eq("unsub_token", token)
+            .execute()
+        )
+        rows = result.data or []
+        return rows[0] if rows else None
+    except Exception:
+        logger.exception("unsubscribe failed")
+        return None
+
+
+def mark_events_emailed(check_id: UUID, pending: list[dict[str, Any]]) -> None:
+    if not pending:
+        return
+    client = get_client()
+    if client is None:
+        return
+    stored = get_check_for_watch(check_id)
+    if stored is None:
+        return
+    keys = {(event.get("code"), event.get("at")) for event in pending}
+    events = []
+    for event in stored.get("watch_events") or []:
+        if not isinstance(event, dict):
+            continue
+        if (event.get("code"), event.get("at")) in keys:
+            events.append({**event, "emailed": True})
+        else:
+            events.append(event)
+    try:
+        client.table("pour_checks").update({"watch_events": events}).eq("id", str(check_id)).execute()
+    except Exception:
+        logger.warning("mark_events_emailed failed")
+
+
+def set_last_digest_at(subscriber_id: str, when: datetime) -> None:
+    client = get_client()
+    if client is None:
+        return
+    try:
+        client.table("watch_subscribers").update({"last_digest_at": when.isoformat()}).eq(
+            "id", str(subscriber_id)
+        ).execute()
+    except Exception:
+        logger.warning("set_last_digest_at failed")
 
 
 def summarize_checks(rows: list[dict[str, Any]]) -> dict[str, Any]:

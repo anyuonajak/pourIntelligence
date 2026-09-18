@@ -91,6 +91,22 @@ def test_serialize_check_watch_state_follows_customer():
     assert closed["watching"] is False
 
 
+def test_serialize_check_includes_subscriber_email():
+    row = {
+        "id": "check-2",
+        "risk_factors": [],
+        "location": {"name": "Denver, CO 80202"},
+        "mix_design": {},
+        "subscriber_id": "sub-1",
+        "watch_subscribers": {"id": "sub-1", "email": "ops@example.com", "unsub_token": "secret-token"},
+    }
+    out = serialize_check(row)
+    assert out["subscriber_email"] == "ops@example.com"
+    assert out["subscriber_id"] == "sub-1"
+    assert "unsub_token" not in out
+    assert "subscriber" not in out
+
+
 def test_admin_js_does_not_close_watches():
     client = TestClient(app)
     js = client.get("/admin.js").text

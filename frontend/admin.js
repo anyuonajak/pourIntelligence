@@ -270,6 +270,11 @@ function renderDetail(row) {
       </div>
     </div>
     <p class="watch-status">${escapeText(watchLine(row))}</p>
+    ${
+      row.subscriber_email
+        ? `<p class="watch-status">Email ${escapeText(row.subscriber_email)}</p>`
+        : ""
+    }
     <dl class="metrics"></dl>
     <section class="event-log-panel">
       <div class="event-log-head"><h3>Event log</h3></div>
