@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/style.css?v=14" />
+    <link rel="stylesheet" href="/style.css?v=15" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   </head>
   <body>
@@ -55,6 +55,7 @@
                   inputmode="numeric"
                   pattern="\d{5}"
                   maxlength="5"
+                  placeholder="US ZIP code"
                   value="94612"
                   required
                 />
@@ -80,7 +81,8 @@
               <div class="row">
                 <label>
                   Cement
-                  <select id="cement" name="cement_type">
+                  <select id="cement" name="cement_type" required>
+                    <option value="">Cement type</option>
                     <option value="Type_I" selected>Type I</option>
                     <option value="Type_II">Type II</option>
                     <option value="Type_III">Type III (high-early)</option>
@@ -89,13 +91,13 @@
                 </label>
                 <label>
                   Target psi
-                  <input id="psi" name="target_psi" type="number" min="2500" max="10000" step="500" value="4000" />
+                  <input id="psi" name="target_psi" type="number" min="2500" max="10000" step="500" value="4000" required />
                 </label>
               </div>
               <div class="row">
                 <label>
                   Thickness (in)
-                  <input id="thickness" name="thickness" type="number" min="1" max="36" step="0.5" value="4" />
+                  <input id="thickness" name="thickness" type="number" min="1" max="36" step="0.5" value="4" required />
                 </label>
                 <label>
                   Concrete temp °F
@@ -104,12 +106,13 @@
               </div>
             </fieldset>
 
-            <fieldset class="field-group" id="fields-masonry" hidden>
+            <fieldset class="field-group" id="fields-masonry" hidden disabled>
               <legend>Mix</legend>
               <div class="row">
                 <label>
                   Units
-                  <select id="unit-type" name="unit_type">
+                  <select id="unit-type" name="unit_type" required>
+                    <option value="">Unit type</option>
                     <option value="CMU" selected>CMU (block)</option>
                     <option value="brick">Brick</option>
                     <option value="stone">Stone</option>
@@ -117,7 +120,8 @@
                 </label>
                 <label>
                   Mortar
-                  <select id="mortar-type" name="mortar_type">
+                  <select id="mortar-type" name="mortar_type" required>
+                    <option value="">Mortar type</option>
                     <option value="Type_N" selected>Type N</option>
                     <option value="Type_S">Type S</option>
                     <option value="Type_M">Type M</option>
@@ -217,6 +221,6 @@
         <a href="/terms" target="_blank" rel="noopener noreferrer">Terms</a>
       </footer>
     </div>
-    <script src="/app.js?v=14"></script>
+    <script src="/app.js?v=15"></script>
   </body>
 </html>

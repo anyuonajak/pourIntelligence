@@ -327,6 +327,13 @@ def test_demo_close_uses_check_id_from_readiness():
     assert "isPersistedCheckId" in js
     assert "local-" in js
     assert "resetComposer" in js
+    reset_fn = js.split("function resetComposer", 1)[1].split("function showError", 1)[0]
+    assert 'zipInput.value = ""' in reset_fn
+    assert "pourDateInput.value = \"\"" in reset_fn or 'pourDateInput.value = ""' in reset_fn
+    assert "loadNotifyEmail" not in reset_fn
+    assert "Type_I" not in reset_fn
+    assert "4000" not in reset_fn
+    assert "94612" not in reset_fn
     page = client.get("/").text
     assert 'id="outcome"' not in page
     assert "How did this pour go" not in page

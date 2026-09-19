@@ -231,22 +231,20 @@ function defaultPourTime() {
 const DEFAULT_ZIP = "94612";
 
 function resetComposer(product) {
-  zipInput.value = DEFAULT_ZIP;
-  pourDateInput.value = defaultPourTime();
-  presetButtons.forEach((item) => {
-    item.classList.toggle("active", item.dataset.zip === DEFAULT_ZIP);
-  });
+  zipInput.value = "";
+  pourDateInput.value = "";
+  if (emailInput) emailInput.value = "";
+  presetButtons.forEach((item) => item.classList.remove("active"));
   if (product === "masonry") {
-    document.querySelector("#unit-type").value = "CMU";
-    document.querySelector("#mortar-type").value = "Type_N";
+    document.querySelector("#unit-type").value = "";
+    document.querySelector("#mortar-type").value = "";
     document.querySelector("#mortar-temp").value = "";
   } else {
-    document.querySelector("#cement").value = "Type_I";
-    document.querySelector("#psi").value = "4000";
-    document.querySelector("#thickness").value = "4";
+    document.querySelector("#cement").value = "";
+    document.querySelector("#psi").value = "";
+    document.querySelector("#thickness").value = "";
     document.querySelector("#concrete-temp").value = "";
   }
-  loadNotifyEmail();
 }
 
 function showError(message) {
@@ -303,7 +301,9 @@ function applyProductChrome(product) {
     button.classList.toggle("active", button.dataset.product === product);
   });
   document.querySelector("#fields-concrete").hidden = masonry;
+  document.querySelector("#fields-concrete").disabled = masonry;
   document.querySelector("#fields-masonry").hidden = !masonry;
+  document.querySelector("#fields-masonry").disabled = !masonry;
   document.querySelector("#ticket-heading").textContent = copy.heading;
   document.querySelector("#ticket-sub").textContent = copy.sub;
   document.querySelector("#date-label").textContent = copy.dateLabel;
