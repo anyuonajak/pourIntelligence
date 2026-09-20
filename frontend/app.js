@@ -32,7 +32,6 @@ const COPY = {
   concrete: {
     heading: "Concrete slab ticket",
     sub: "Jobsite local time. Defaults are a typical Type I slab.",
-    workspace: "Concrete slab",
     submit: "Check this pour",
     emptyKicker: "Waiting on a concrete ticket",
     dateLabel: "Pour date & time",
@@ -43,7 +42,6 @@ const COPY = {
   masonry: {
     heading: "Masonry ticket",
     sub: "Jobsite local time. Defaults are a typical CMU / Type N lay-up.",
-    workspace: "Masonry",
     submit: "Check this lay-up",
     emptyKicker: "Waiting on a masonry ticket",
     dateLabel: "Lay-up date & time",
@@ -345,8 +343,6 @@ function applyProductChrome(product) {
   document.querySelector("#ticket-sub").textContent = copy.sub;
   document.querySelector("#date-label").textContent = copy.dateLabel;
   document.querySelector("#chart-title").textContent = copy.chartTitle;
-  const workspaceLabel = document.querySelector("#workspace-label");
-  if (workspaceLabel) workspaceLabel.textContent = copy.workspace;
   document.body.dataset.product = product;
   if (inFlightProduct === product) {
     submitBtn.disabled = true;
@@ -390,7 +386,7 @@ function renderChart(hourly) {
 
   const sans = "Satoshi, system-ui, sans-serif";
   const chartInk = "#52525b";
-  const tick = { color: chartInk, font: { family: sans, size: 12, weight: "400" } };
+  const tick = { color: chartInk, font: { family: sans, size: 14, weight: "400" } };
   const blue = "#4d74f7";
   chart = new Chart(canvas, {
     type: "line",
@@ -442,7 +438,7 @@ function renderChart(hourly) {
             boxWidth: 8,
             boxHeight: 8,
             padding: 16,
-            font: { family: sans, size: 12, weight: "400" },
+            font: { family: sans, size: 14, weight: "400" },
           },
         },
       },

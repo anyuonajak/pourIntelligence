@@ -26,14 +26,14 @@
   --radius-sm: 12px;
   --sans: "Satoshi", system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
   --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  --t-12: 12px;
-  --t-14: 14px;
-  --t-16: 16px;
-  --t-20: 20px;
-  --t-28: 28px;
+  --t-12: 14px;
+  --t-14: 16px;
+  --t-16: 18px;
+  --t-20: 24px;
+  --t-28: 32px;
   --w-regular: 400;
   --w-medium: 500;
-  --w-wordmark: 600;
+  --w-wordmark: 700;
 }
 
 * {
@@ -107,9 +107,10 @@ b {
 
 .wordmark {
   color: var(--ink);
-  font-size: var(--t-16);
+  font-size: var(--t-20);
   font-weight: var(--w-wordmark);
-  letter-spacing: -0.04em;
+  letter-spacing: -0.05em;
+  line-height: 1;
   text-decoration: none;
   white-space: nowrap;
 }
