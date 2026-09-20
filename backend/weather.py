@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
+import time
 from datetime import date, datetime, timedelta, timezone
 
 import httpx
@@ -30,6 +32,10 @@ logger = logging.getLogger("pourintelligence")
 
 # lat/lon-rounded forecasts, so watch polls and nearby tickets share one upstream call.
 _MEMORY: dict[str, tuple[datetime, dict]] = {}
+# One process-wide gap between actual Open-Meteo HTTP calls.
+HTTP_COOLDOWN_SECONDS = 1.5
+_LAST_HTTP_MONO: float | None = None
+_http_gate: asyncio.Lock | None = None
 
 
 class WeatherUnavailable(Exception):
@@ -43,7 +49,45 @@ class WeatherUnavailable(Exception):
 
 
 def clear_memory_cache() -> None:
+    global _LAST_HTTP_MONO, _http_gate
     _MEMORY.clear()
+    _LAST_HTTP_MONO = None
+    _http_gate = None
+
+
+def _memory_get_any(key: str) -> dict | None:
+    entry = _MEMORY.get(key)
+    if not entry:
+        return None
+    return entry[1]
+
+
+def _read_any_cache(key: str) -> dict | None:
+    cached = _memory_get_any(key)
+    if cached:
+        return cached
+    cached = get_weather_cache(key, any_age=True)
+    if cached:
+        _memory_set(key, cached)
+    return cached
+
+
+async def _open_meteo_get(url: str, params: dict) -> httpx.Response:
+    """Serialize upstream forecast calls and space them a beat apart."""
+    global _LAST_HTTP_MONO, _http_gate
+    if _http_gate is None:
+        _http_gate = asyncio.Lock()
+    async with _http_gate:
+        now = time.monotonic()
+        if _LAST_HTTP_MONO is not None:
+            wait = HTTP_COOLDOWN_SECONDS - (now - _LAST_HTTP_MONO)
+            if wait > 0:
+                await asyncio.sleep(wait)
+        try:
+            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+                return await client.get(url, params=params)
+        finally:
+            _LAST_HTTP_MONO = time.monotonic()
 
 
 def _memory_get(key: str, max_age_minutes: int) -> dict | None:
@@ -184,6 +228,7 @@ async def fetch_hourly(
     longitude: float,
     pour_date: datetime,
     cache_ttl_minutes: int | None = None,
+    refresh: bool = True,
 ) -> tuple[list[WeatherHour], str | None]:
     pour_day = pour_date.date()
     today = date.today()
@@ -220,13 +265,19 @@ async def fetch_hourly(
     key = cache_key_for_weather(latitude, longitude, pour_day.isoformat(), mode)
     fresh_ttl = _fresh_ttl(cache_ttl_minutes)
 
-    cached = _hours_from_payload(_read_cache(key, fresh_ttl))
-    if cached:
-        return cached
+    # Browser polls read any cached forecast (including stale) and never refresh.
+    # Readiness submit and the watch-tick job may hit Open-Meteo when fresh TTL expires.
+    if not refresh:
+        cached = _hours_from_payload(_read_any_cache(key))
+        if cached:
+            return cached
+    else:
+        cached = _hours_from_payload(_read_cache(key, fresh_ttl))
+        if cached:
+            return cached
 
     try:
-        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-            response = await client.get(url, params=params)
+        response = await _open_meteo_get(url, params)
     except httpx.TimeoutException:
         logger.warning("weather upstream timed out")
         stale = _hours_from_payload(_read_cache(key, fresh_ttl, stale=True))

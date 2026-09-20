@@ -66,6 +66,7 @@ def get_weather_cache(
     key: str,
     max_age_minutes: Optional[int] = None,
     stale_within_minutes: Optional[int] = None,
+    any_age: bool = False,
 ) -> Optional[dict[str, Any]]:
     client = get_client()
     if client is None:
@@ -73,7 +74,9 @@ def get_weather_cache(
     try:
         now = datetime.now(timezone.utc)
         query = client.table("weather_cache").select("payload,fetched_at").eq("cache_key", key)
-        if stale_within_minutes is not None:
+        if any_age:
+            pass
+        elif stale_within_minutes is not None:
             cutoff = now - timedelta(minutes=stale_within_minutes)
             query = query.gt("fetched_at", cutoff.isoformat())
         else:
@@ -120,17 +123,21 @@ def insert_pour_check(row: dict[str, Any]) -> Optional[UUID]:
         try:
             client.table("pour_checks").insert(payload).execute()
         except Exception:
-            payload.pop("subscriber_id", None)
+            payload.pop("account_id", None)
             try:
                 client.table("pour_checks").insert(payload).execute()
             except Exception:
-                payload.pop("watching", None)
-                payload.pop("last_checked_at", None)
+                payload.pop("subscriber_id", None)
                 try:
                     client.table("pour_checks").insert(payload).execute()
                 except Exception:
-                    payload.pop("product", None)
-                    client.table("pour_checks").insert(payload).execute()
+                    payload.pop("watching", None)
+                    payload.pop("last_checked_at", None)
+                    try:
+                        client.table("pour_checks").insert(payload).execute()
+                    except Exception:
+                        payload.pop("product", None)
+                        client.table("pour_checks").insert(payload).execute()
         return UUID(str(check_id))
     except Exception:
         logger.exception("pour_check insert failed")
@@ -177,6 +184,7 @@ _CHECK_CORE = (
 _SUBSCRIBER_JOIN = "watch_subscribers(id,email,unsub_token,alerts_enabled,digest_enabled,last_digest_at)"
 # Newest columns first; each fallback drops a migration the database may not have run yet.
 CHECK_SELECTS = (
+    f"{_CHECK_CORE},product,watching,last_checked_at,watch_events,subscriber_id,account_id,{_SUBSCRIBER_JOIN}",
     f"{_CHECK_CORE},product,watching,last_checked_at,watch_events,subscriber_id,{_SUBSCRIBER_JOIN}",
     f"{_CHECK_CORE},product,watching,last_checked_at,watch_events,subscriber_id",
     f"{_CHECK_CORE},product,watching,last_checked_at,watch_events",
@@ -592,3 +600,183 @@ def revoke_api_key(key_id: str) -> bool:
         raise RuntimeError("Database is not configured.")
     result = client.table("api_keys").update({"active": False}).eq("id", key_id).execute()
     return bool(result.data)
+
+
+FREE_WATCH_LIMIT = 3
+_ACCOUNT_COLUMNS = (
+    "id,created_at,email,password_hash,kind,plan,trial_ends_at,session_nonce,display_name"
+)
+_ACCOUNTS_BY_ID: dict[str, dict[str, Any]] = {}
+_ACCOUNTS_BY_EMAIL: dict[str, str] = {}
+_MEMORY_WATCHING: dict[str, int] = {}
+
+
+def clear_account_memory() -> None:
+    _ACCOUNTS_BY_ID.clear()
+    _ACCOUNTS_BY_EMAIL.clear()
+    _MEMORY_WATCHING.clear()
+
+
+def _public_account(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": str(row.get("id")),
+        "created_at": row.get("created_at"),
+        "email": row.get("email"),
+        "password_hash": row.get("password_hash"),
+        "kind": row.get("kind") or "individual",
+        "plan": row.get("plan") or "free",
+        "trial_ends_at": row.get("trial_ends_at"),
+        "session_nonce": row.get("session_nonce"),
+        "display_name": row.get("display_name"),
+    }
+
+
+def _memory_account_by_email(email: str) -> Optional[dict[str, Any]]:
+    account_id = _ACCOUNTS_BY_EMAIL.get(email)
+    if not account_id:
+        return None
+    row = _ACCOUNTS_BY_ID.get(account_id)
+    return dict(row) if row else None
+
+
+def get_account_by_email(email: str) -> Optional[dict[str, Any]]:
+    cleaned = (email or "").strip().lower()
+    if not cleaned:
+        return None
+    client = get_client()
+    if client is None:
+        return _memory_account_by_email(cleaned)
+    try:
+        result = (
+            client.table("accounts")
+            .select(_ACCOUNT_COLUMNS)
+            .eq("email", cleaned)
+            .limit(1)
+            .execute()
+        )
+        rows = result.data or []
+        return _public_account(rows[0]) if rows else None
+    except Exception:
+        logger.warning("account email lookup failed")
+        return _memory_account_by_email(cleaned)
+
+
+def get_account_by_id(account_id: str) -> Optional[dict[str, Any]]:
+    if not account_id:
+        return None
+    client = get_client()
+    if client is None:
+        row = _ACCOUNTS_BY_ID.get(str(account_id))
+        return dict(row) if row else None
+    try:
+        result = (
+            client.table("accounts")
+            .select(_ACCOUNT_COLUMNS)
+            .eq("id", str(account_id))
+            .limit(1)
+            .execute()
+        )
+        rows = result.data or []
+        return _public_account(rows[0]) if rows else None
+    except Exception:
+        logger.warning("account id lookup failed")
+        row = _ACCOUNTS_BY_ID.get(str(account_id))
+        return dict(row) if row else None
+
+
+def create_account(
+    email: str,
+    password_hash: str,
+    *,
+    session_nonce: str,
+    display_name: Optional[str] = None,
+) -> Optional[dict[str, Any]]:
+    cleaned = email.strip().lower()
+    now = datetime.now(timezone.utc)
+    trial_ends = now + timedelta(days=30)
+    row = {
+        "id": str(uuid4()),
+        "created_at": now.isoformat(),
+        "email": cleaned,
+        "password_hash": password_hash,
+        "kind": "individual",
+        "plan": "free",
+        "trial_ends_at": trial_ends.isoformat(),
+        "session_nonce": session_nonce,
+        "display_name": (display_name or "").strip() or None,
+    }
+    client = get_client()
+    if client is None:
+        if cleaned in _ACCOUNTS_BY_EMAIL:
+            return None
+        _ACCOUNTS_BY_ID[row["id"]] = dict(row)
+        _ACCOUNTS_BY_EMAIL[cleaned] = row["id"]
+        return dict(row)
+    try:
+        created = client.table("accounts").insert(row).execute()
+        stored = (created.data or [row])[0]
+        return _public_account(stored)
+    except Exception:
+        logger.warning("account insert failed")
+        return None
+
+
+def set_account_nonce(account_id: str, session_nonce: str) -> bool:
+    client = get_client()
+    if client is None:
+        row = _ACCOUNTS_BY_ID.get(str(account_id))
+        if not row:
+            return False
+        row["session_nonce"] = session_nonce
+        return True
+    try:
+        result = (
+            client.table("accounts")
+            .update({"session_nonce": session_nonce})
+            .eq("id", str(account_id))
+            .execute()
+        )
+        if result.data:
+            return True
+        row = _ACCOUNTS_BY_ID.get(str(account_id))
+        if not row:
+            return False
+        row["session_nonce"] = session_nonce
+        return True
+    except Exception:
+        logger.warning("account nonce update failed")
+        row = _ACCOUNTS_BY_ID.get(str(account_id))
+        if not row:
+            return False
+        row["session_nonce"] = session_nonce
+        return True
+
+
+def count_watching_for_account(account_id: str) -> int:
+    if not account_id:
+        return 0
+    client = get_client()
+    if client is None:
+        return _MEMORY_WATCHING.get(str(account_id), 0)
+    try:
+        result = (
+            client.table("pour_checks")
+            .select("id", count="exact")
+            .eq("account_id", str(account_id))
+            .eq("watching", True)
+            .execute()
+        )
+        if getattr(result, "count", None) is not None:
+            return int(result.count)
+        return len(result.data or [])
+    except Exception:
+        logger.warning("account watch count failed")
+        return _MEMORY_WATCHING.get(str(account_id), 0)
+
+
+def record_memory_watch(account_id: str) -> None:
+    """Count a watching stamp when pour_checks is not persisted."""
+    if not account_id or get_client() is not None:
+        return
+    key = str(account_id)
+    _MEMORY_WATCHING[key] = _MEMORY_WATCHING.get(key, 0) + 1

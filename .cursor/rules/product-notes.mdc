@@ -9,5 +9,15 @@ Read `docs/product-notes.md` before changing product, pricing, accounts, or mark
 
 - Never put pricing on the landing page or any customer UI. Do not show org/team prices in the UI.
 - Stripe is not set up. All accounts default to free until it exists.
-- Company name is Monolith. Do not invent a domain (still TBD).
-- This sprint: dashboard side nav only. No landing, auth, Stripe, or pricing UI.
+- Company name is Monolith. Do not invent a domain (still TBD; will be something related to monolith).
+- Implementation order (easy → hard), with status:
+  1. Weather cache + clean errors — done
+  2. One poller (job refreshes; browsers read cache) — this PR
+  3. Side nav — done
+  4. Landing page (no pricing) — this PR
+  5. Individual sign up / sign in, default free, onboard timestamp, 1 month trial, 3 watches — this PR
+  6. One session per individual — this PR
+  7. Admin onboards Teams/Org — later
+  8. Team multi-login / SSO — later
+  9. Stripe — later
+  10. Custom domain — later (user buying)

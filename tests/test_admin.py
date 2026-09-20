@@ -116,7 +116,9 @@ def test_admin_js_does_not_close_watches():
 
 def test_demo_assets_are_cache_busted():
     client = TestClient(app)
-    page = client.get("/")
+    landing = client.get("/")
+    assert re.search(r'href="/style\.css\?v=\d+"', landing.text)
+    page = client.get("/app")
     assert re.search(r'href="/style\.css\?v=\d+"', page.text)
     assert re.search(r'src="/app\.js\?v=\d+"', page.text)
     assert 'id="empty-kicker"' in page.text

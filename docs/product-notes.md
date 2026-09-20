@@ -20,10 +20,8 @@ Stripe: not set up yet. Plan details TBD.
 ## Still needed
 
 - Company name — **Monolith**
-- Landing page — TBD
-- Sign in — TBD
+- Domain — TBD (will be something related to monolith; do not invent the hostname)
 - Email for the org — TBD
-- Domain — TBD (exploring where to purchase)
 
 ## Accounts
 
@@ -32,8 +30,15 @@ Stripe: not set up yet. Plan details TBD.
 - Only **one** individual account session with those credentials (one at a time).
 - **Infinite** team accounts can be signed in (company Gmail, SSO, etc.).
 
-## Product UI direction
+## Implementation order (easy → hard)
 
-- Navbar for Watches, Events, Tickets (or similar).
-- Side nav on the current dashboard to stop scrolling everything on one page.
-- **This sprint:** side nav only. No landing, auth, Stripe, or pricing UI.
+1. Weather cache + clean errors — **done**
+2. One poller (job refreshes; browsers read cache) — **this PR**
+3. Side nav — **done**
+4. Landing page (no pricing) — **this PR**
+5. Individual sign up / sign in, default free, onboard timestamp, 1 month trial, 3 watches — **this PR**
+6. One session per individual — **this PR**
+7. Admin onboards Teams/Org — later
+8. Team multi-login / SSO — later
+9. Stripe — later
+10. Custom domain — later (user buying)

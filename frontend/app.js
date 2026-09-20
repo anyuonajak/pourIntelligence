@@ -320,6 +320,12 @@ function showError(message) {
   formError.textContent = show ? text || COPY[currentProduct].error : "";
 }
 
+function showWatchLimit(hit) {
+  const note = document.querySelector("#watch-limit-note");
+  if (!note) return;
+  note.hidden = !hit;
+}
+
 function formatWhen(isoLocal, timezone) {
   const label = isoLocal.replace("T", " ");
   return timezone ? `${label} · ${timezone}` : label;
@@ -781,6 +787,7 @@ async function pollOneWatch(entry) {
   try {
     const response = await fetch("/v1/pour-watch", {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
@@ -853,7 +860,7 @@ async function closeWatch(id) {
   const checkId = entry.watch.request?.check_id || entry.payload?.check_id || entry.id;
   if (isPersistedCheckId(checkId)) {
     try {
-      await fetch(`/v1/pour-watch/${checkId}/close`, { method: "POST" });
+      await fetch(`/v1/pour-watch/${checkId}/close`, { method: "POST", credentials: "include" });
     } catch {
       /* local close still stands */
     }
@@ -938,6 +945,7 @@ async function checkPour(event) {
   try {
     const response = await fetch("/v1/pour-readiness", {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
@@ -956,6 +964,7 @@ async function checkPour(event) {
       paintResult(payload, pourDate);
     }
     startWatch(product, payload, body, pourDate);
+    showWatchLimit(Boolean(payload.watch_limit_reached));
     if (currentProduct === product) {
       resetComposer(product);
     }
@@ -1017,7 +1026,37 @@ watchListBody.addEventListener("click", (event) => {
   openWatch(button.dataset.watchId);
 });
 
-loadWatchRoster();
-loadNotifyEmail();
-renderWatchList();
-selectProduct("concrete");
+async function requireAccount() {
+  try {
+    const response = await fetch("/v1/auth/me", { credentials: "include" });
+    if (response.status === 401) {
+      window.location.replace("/login");
+      return null;
+    }
+    if (!response.ok) return {};
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
+
+function wireAccountBar(me) {
+  const emailEl = document.querySelector("#account-email");
+  if (emailEl && me && me.email) emailEl.textContent = me.email;
+  const signOut = document.querySelector("#sign-out");
+  if (signOut) {
+    signOut.addEventListener("click", async () => {
+      await fetch("/v1/auth/logout", { method: "POST", credentials: "include" });
+      window.location.replace("/login");
+    });
+  }
+}
+
+requireAccount().then((me) => {
+  if (!me) return;
+  wireAccountBar(me);
+  loadWatchRoster();
+  loadNotifyEmail();
+  renderWatchList();
+  selectProduct("concrete");
+});

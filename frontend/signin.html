@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Admin sign in — Monolith</title>
+    <title>Sign in — Monolith</title>
     <link rel="preconnect" href="https://api.fontshare.com" />
     <link rel="preconnect" href="https://cdn.fontshare.com" crossorigin />
     <link
@@ -17,49 +17,52 @@
       <div class="topbar-inner">
         <div class="brand">
           <a class="wordmark" href="/">Monolith</a>
-          <span class="product-sub">Admin sign-in</span>
         </div>
       </div>
     </header>
     <div class="page">
       <section class="login-panel">
-        <p class="empty-kicker">Internal</p>
         <h2>Sign in</h2>
-        <form id="login-form">
+        <form id="auth-form">
           <label>
-            Username
-            <input id="username" name="username" value="admin" autocomplete="username" required />
+            Email
+            <input id="email" name="email" type="email" autocomplete="email" required />
           </label>
           <label>
             Password
             <input id="password" name="password" type="password" autocomplete="current-password" required />
           </label>
-          <button type="submit" id="login-btn" class="btn-primary">Enter</button>
-          <p id="login-error" class="form-error" hidden></p>
+          <button type="submit" id="signin-btn" class="btn-primary">Sign in</button>
+          <p id="auth-error" class="form-error" hidden></p>
         </form>
+        <p class="ticket-foot"><a href="/signup">Get started</a></p>
       </section>
     </div>
     <script>
-      const form = document.querySelector("#login-form");
-      const errorEl = document.querySelector("#login-error");
+      fetch("/v1/auth/me", { credentials: "include" }).then((response) => {
+        if (response.ok) window.location.replace("/app");
+      });
+      const form = document.querySelector("#auth-form");
+      const errorEl = document.querySelector("#auth-error");
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         errorEl.hidden = true;
-        const response = await fetch("/admin/api/login", {
+        const response = await fetch("/v1/auth/login", {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            username: document.querySelector("#username").value,
+            email: document.querySelector("#email").value,
             password: document.querySelector("#password").value,
           }),
         });
-        const payload = await response.json();
+        const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
           errorEl.hidden = false;
-          errorEl.textContent = payload.detail || "Could not sign in.";
+          errorEl.textContent = typeof payload.detail === "string" ? payload.detail : "Could not sign in.";
           return;
         }
-        window.location.href = "/admin";
+        window.location.href = "/app";
       });
     </script>
   </body>

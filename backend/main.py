@@ -10,15 +10,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 
+from .accounts import router as accounts_router
 from .admin import router as admin_router
+from .auth import get_account_session
 from .config import get_settings
 from .db import (
+    FREE_WATCH_LIMIT,
     check_exists,
+    count_watching_for_account,
     get_check_for_watch,
     get_client,
     insert_pour_check,
     insert_pour_outcome,
     lookup_api_key,
+    record_memory_watch,
     record_watch_poll,
     set_watching,
     upsert_subscriber,
@@ -64,12 +69,14 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Request-ID", "X-Jobs-Secret"],
 )
 app.add_middleware(SessionMiddleware, secret_key=settings.session_secret, same_site="lax", https_only=False)
 app.include_router(admin_router)
 app.include_router(jobs_router)
+app.include_router(accounts_router)
 
 
 @app.exception_handler(WeatherUnavailable)
@@ -95,8 +102,20 @@ def _jobsite_now(tz_name: str | None) -> datetime:
     return jobsite_now(tz_name)
 
 
-async def _evaluate(body: PourReadinessRequest, lat: float, lon: float, cache_ttl_minutes: int | None = None):
-    hourly, tz_name = await fetch_hourly(lat, lon, body.pour_date, cache_ttl_minutes=cache_ttl_minutes)
+async def _evaluate(
+    body: PourReadinessRequest,
+    lat: float,
+    lon: float,
+    cache_ttl_minutes: int | None = None,
+    refresh: bool = True,
+):
+    hourly, tz_name = await fetch_hourly(
+        lat,
+        lon,
+        body.pour_date,
+        cache_ttl_minutes=cache_ttl_minutes,
+        refresh=refresh,
+    )
     try:
         if body.product == ProductType.MASONRY:
             result = evaluate_masonry(
@@ -185,6 +204,12 @@ async def pour_readiness(request: Request, body: PourReadinessRequest) -> PourRe
 
     predictions = result["predictions"].model_dump(mode="json")
     watching = is_watch_open(body.pour_date, predictions, _jobsite_now(tz_name))
+    watch_limit_reached = False
+    account = get_account_session(request)
+    account_id = str(account["id"]) if account else None
+    if account_id and watching and count_watching_for_account(account_id) >= FREE_WATCH_LIMIT:
+        watching = False
+        watch_limit_reached = True
 
     api_key = getattr(request.state, "api_key", None)
     referer = request.headers.get("referer") or ""
@@ -226,8 +251,11 @@ async def pour_readiness(request: Request, body: PourReadinessRequest) -> PourRe
             "watching": watching,
             "last_checked_at": datetime.now(timezone.utc).isoformat(),
             "subscriber_id": subscriber_id,
+            "account_id": account_id,
         }
     )
+    if account_id and watching:
+        record_memory_watch(account_id)
 
     logger.info(
         "pour_readiness request_id=%s status=%s check_id=%s",
@@ -269,6 +297,7 @@ async def pour_readiness(request: Request, body: PourReadinessRequest) -> PourRe
         watching=watching,
         watch_until=watch_until(body.pour_date, predictions).isoformat(),
         next_check_seconds=settings.watch_poll_seconds,
+        watch_limit_reached=watch_limit_reached,
     )
 
 
@@ -281,7 +310,13 @@ async def pour_watch(request: Request, body: PourWatchRequest) -> PourWatchRespo
         body.zip_code,
         body.address,
     )
-    result, tz_name = await _evaluate(body, lat, lon, cache_ttl_minutes=settings.watch_weather_cache_minutes)
+    result, tz_name = await _evaluate(
+        body,
+        lat,
+        lon,
+        cache_ttl_minutes=settings.watch_weather_cache_minutes,
+        refresh=False,
+    )
 
     status = result["go_no_go_status"].value
     risk_factors = result["risk_factors"]
@@ -408,7 +443,12 @@ def pour_outcomes(body: PourOutcomeRequest) -> PourOutcomeResponse:
 
 
 @app.get("/")
-def index() -> FileResponse:
+def landing() -> FileResponse:
+    return FileResponse(FRONTEND / "landing.html", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/app")
+def dashboard() -> FileResponse:
     return FileResponse(FRONTEND / "index.html", headers={"Cache-Control": "no-cache"})
 
 

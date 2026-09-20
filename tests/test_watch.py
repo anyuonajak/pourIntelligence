@@ -323,6 +323,7 @@ def test_demo_close_uses_check_id_from_readiness():
     client = TestClient(app)
     js = client.get("/app.js").text
     assert "payload.check_id" in js
+    assert "credentials: \"include\"" in js or "credentials: 'include'" in js
     assert "/v1/pour-watch/${checkId}/close" in js
     assert "isPersistedCheckId" in js
     assert "local-" in js
@@ -334,7 +335,7 @@ def test_demo_close_uses_check_id_from_readiness():
     assert "Type_I" not in reset_fn
     assert "4000" not in reset_fn
     assert "94612" not in reset_fn
-    page = client.get("/").text
+    page = client.get("/app").text
     assert 'id="outcome"' not in page
     assert "How did this pour go" not in page
     assert "How did this pour go" not in js

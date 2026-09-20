@@ -59,9 +59,11 @@ class _StatusClient:
 
 @pytest.fixture(autouse=True)
 def _clean_weather_cache():
+    weather.HTTP_COOLDOWN_SECONDS = 0
     weather.clear_memory_cache()
     yield
     weather.clear_memory_cache()
+    weather.HTTP_COOLDOWN_SECONDS = 1.5
 
 
 def test_429_with_cache_returns_cached_forecast(monkeypatch):
@@ -152,3 +154,62 @@ def test_timeout_with_cache_returns_cached_forecast(monkeypatch):
     hours, tz_name = asyncio.run(weather.fetch_hourly(44.9835, -93.2683, pour, cache_ttl_minutes=10))
     assert hours
     assert tz_name == "America/Chicago"
+
+
+def test_second_pour_watch_with_cache_does_not_http(monkeypatch):
+    pour = _pour_date()
+    key = cache_key_for_weather(44.9835, -93.2683, pour.date().isoformat(), "forecast")
+    weather._memory_set(key, _payload())
+
+    def _should_not_run(*_args, **_kwargs):
+        raise AssertionError("pour_watch should read cache and not call Open-Meteo")
+
+    monkeypatch.setattr(weather.httpx, "AsyncClient", _should_not_run)
+    client = TestClient(app)
+    first = client.post(
+        "/v1/pour-watch",
+        json={
+            "latitude": 44.9835,
+            "longitude": -93.2683,
+            "pour_date": pour.isoformat(),
+            "product": "concrete",
+        },
+    )
+    assert first.status_code == 200
+    second = client.post(
+        "/v1/pour-watch",
+        json={
+            "latitude": 44.9835,
+            "longitude": -93.2683,
+            "pour_date": pour.isoformat(),
+            "product": "concrete",
+        },
+    )
+    assert second.status_code == 200
+
+
+def test_pour_watch_429_without_cache_is_generic(monkeypatch):
+    boom = _StatusClient(
+        429,
+        "Client error '429 Too Many Requests' for url 'https://api.open-meteo.com/v1/forecast'",
+    )
+    monkeypatch.setattr(weather.httpx, "AsyncClient", boom.factory())
+    client = TestClient(app)
+    response = client.post(
+        "/v1/pour-watch",
+        json={
+            "latitude": 44.9835,
+            "longitude": -93.2683,
+            "pour_date": _pour_date().isoformat(),
+            "product": "concrete",
+        },
+    )
+    assert response.status_code == 503
+    body = response.json()
+    assert body == {"error": "weather_unavailable", "message": WEATHER_UNAVAILABLE_MESSAGE}
+    text = response.text.lower()
+    assert "open-meteo" not in text
+    assert "http://" not in text
+    assert "https://" not in text
+    assert "$20" not in text
+    assert "$100" not in text

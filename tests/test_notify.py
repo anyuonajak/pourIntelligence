@@ -619,7 +619,7 @@ def test_render_watch_started_html_is_factual():
 
 def test_demo_email_field_is_terse():
     client = TestClient(app)
-    page = client.get("/").text
+    page = client.get("/app").text
     assert 'id="notify-email"' in page
     assert "how it works" not in page.lower()
     assert "we emailed" not in page.lower()

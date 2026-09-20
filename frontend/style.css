@@ -278,6 +278,8 @@ b {
 }
 
 .btn-primary,
+a.btn-primary,
+a.text-btn,
 button#submit-btn,
 #login-btn,
 #key-form button[type="submit"] {
@@ -289,6 +291,7 @@ button#submit-btn,
   font-weight: var(--w-medium);
   letter-spacing: 0;
   text-transform: none;
+  text-decoration: none;
 }
 
 .product-switch button,
@@ -427,6 +430,7 @@ button:focus-visible {
 }
 
 .btn-primary,
+a.btn-primary,
 button#submit-btn,
 #login-btn,
 #key-form button[type="submit"] {
@@ -436,12 +440,13 @@ button#submit-btn,
   background: var(--accent-ink);
   color: #fff;
   -webkit-text-fill-color: #fff;
-  border-color: var(--accent-ink);
+  border: 1px solid var(--accent-ink);
   font-weight: var(--w-medium);
   font-size: var(--t-14);
 }
 
 .btn-primary:hover,
+a.btn-primary:hover,
 button#submit-btn:hover,
 #login-btn:hover,
 #key-form button[type="submit"]:hover {
@@ -449,6 +454,20 @@ button#submit-btn:hover,
   border-color: #2f4ec4;
   color: #fff;
   -webkit-text-fill-color: #fff;
+  text-decoration: none;
+}
+
+a.text-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  color: var(--ink);
+}
+
+a.text-btn:hover {
+  text-decoration: none;
 }
 
 button#submit-btn:disabled,
@@ -1130,6 +1149,44 @@ button#submit-btn:disabled,
 .login-panel {
   max-width: 360px;
   padding: 24px;
+}
+
+.landing {
+  min-height: 100vh;
+}
+
+.landing-main {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+}
+
+.landing-card {
+  width: min(440px, 100%);
+  padding: 40px 32px;
+  text-align: center;
+}
+
+.landing-wordmark {
+  display: block;
+  margin: 0 0 28px;
+  font-size: var(--t-28);
+  font-weight: var(--w-wordmark);
+  letter-spacing: -0.05em;
+}
+
+.landing-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.watch-limit-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: var(--t-12);
 }
 
 .login-panel h2 {
