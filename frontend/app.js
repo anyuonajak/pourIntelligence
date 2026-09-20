@@ -351,7 +351,10 @@ function renderChart(hourly) {
 
   destroyChart();
 
-  const tick = { color: "#5c6570", font: { family: "IBM Plex Sans, system-ui, sans-serif", size: 11 } };
+  const sans = "Satoshi, system-ui, sans-serif";
+  const chartInk = "#52525b";
+  const tick = { color: chartInk, font: { family: sans, size: 12, weight: "400" } };
+  const blue = "#4d74f7";
   chart = new Chart(canvas, {
     type: "line",
     data: {
@@ -360,32 +363,32 @@ function renderChart(hourly) {
         {
           label: "Air °F",
           data: temps,
-          borderColor: "#1c1e21",
+          borderColor: blue,
           backgroundColor: "transparent",
-          tension: 0.2,
-          borderWidth: 1.5,
+          tension: 0.25,
+          borderWidth: 2,
           pointRadius: 0,
           yAxisID: "y",
         },
         {
           label: "RH %",
           data: humidity,
-          borderColor: "#5c6570",
+          borderColor: "rgba(77, 116, 247, 0.45)",
           backgroundColor: "transparent",
           borderDash: [4, 4],
-          tension: 0.2,
-          borderWidth: 1.25,
+          tension: 0.25,
+          borderWidth: 1.5,
           pointRadius: 0,
           yAxisID: "y",
         },
         {
           label: "Evap lb/ft²/hr",
           data: evaporation,
-          borderColor: "#2f5d67",
-          backgroundColor: "rgba(47, 93, 103, 0.08)",
+          borderColor: "rgba(77, 116, 247, 0.7)",
+          backgroundColor: "rgba(77, 116, 247, 0.08)",
           fill: true,
-          tension: 0.2,
-          borderWidth: 1.25,
+          tension: 0.25,
+          borderWidth: 1.5,
           pointRadius: 0,
           yAxisID: "yEvap",
         },
@@ -397,27 +400,33 @@ function renderChart(hourly) {
       interaction: { mode: "index", intersect: false },
       plugins: {
         legend: {
-          labels: { color: "#5c6570", boxWidth: 12, font: { family: "IBM Plex Sans, system-ui, sans-serif", size: 11 } },
+          labels: {
+            color: chartInk,
+            boxWidth: 8,
+            boxHeight: 8,
+            padding: 16,
+            font: { family: sans, size: 12, weight: "400" },
+          },
         },
       },
       scales: {
         x: {
-          ticks: { ...tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
-          grid: { color: "#e8eaee" },
-          border: { color: "#d0d4dc" },
+          ticks: { ...tick, maxRotation: 0, autoSkip: true, maxTicksLimit: window.innerWidth < 700 ? 5 : 10 },
+          grid: { color: "#eef0f3" },
+          border: { display: false },
         },
         y: {
-          title: { display: true, text: "°F / % RH", color: "#5c6570", font: tick.font },
+          title: { display: true, text: "°F / % RH", color: chartInk, font: tick.font },
           ticks: tick,
-          grid: { color: "#e8eaee" },
-          border: { color: "#d0d4dc" },
+          grid: { color: "#eef0f3" },
+          border: { display: false },
         },
         yEvap: {
           position: "right",
-          title: { display: true, text: "lb/ft²/hr", color: "#5c6570", font: tick.font },
+          title: { display: true, text: "lb/ft²/hr", color: chartInk, font: tick.font },
           ticks: tick,
           grid: { drawOnChartArea: false },
-          border: { color: "#d0d4dc" },
+          border: { display: false },
           suggestedMin: 0,
         },
       },
