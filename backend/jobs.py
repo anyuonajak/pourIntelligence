@@ -36,14 +36,14 @@ UNSUB_HTML = """<!DOCTYPE html>
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Unsubscribed — Pour Intelligence</title>
-  <link rel="stylesheet" href="/style.css?v=12"/>
+  <title>Unsubscribed — Monolith</title>
+  <link rel="stylesheet" href="/style.css?v=24"/>
 </head>
 <body>
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <a class="wordmark" href="/">Pour Intelligence</a>
+        <a class="wordmark" href="/">Monolith</a>
       </div>
     </div>
   </header>
@@ -62,14 +62,14 @@ UNSUB_MISSING_HTML = """<!DOCTYPE html>
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Unsubscribe — Pour Intelligence</title>
-  <link rel="stylesheet" href="/style.css?v=12"/>
+  <title>Unsubscribe — Monolith</title>
+  <link rel="stylesheet" href="/style.css?v=24"/>
 </head>
 <body>
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <a class="wordmark" href="/">Pour Intelligence</a>
+        <a class="wordmark" href="/">Monolith</a>
       </div>
     </div>
   </header>

@@ -85,7 +85,7 @@ def render_alert_html(
         'style="border-collapse:collapse;border:1px solid #ecece8;">'
         f"{rows}</table>"
     )
-    return wrap_email("Pour Intelligence", body, unsubscribe_url(unsub_token))
+    return wrap_email("Monolith", body, unsubscribe_url(unsub_token))
 
 
 def render_watch_started_html(
@@ -134,7 +134,7 @@ def render_digest_html(*, sites: list[dict[str, Any]], unsub_token: str | None) 
         'style="border-collapse:collapse;border:1px solid #ecece8;">'
         f"{header}{''.join(rows)}</table>"
     )
-    return wrap_email("Pour Intelligence daily", body, unsubscribe_url(unsub_token))
+    return wrap_email("Monolith daily", body, unsubscribe_url(unsub_token))
 
 
 async def send_email(to: str, subject: str, html_body: str) -> bool:

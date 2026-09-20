@@ -180,7 +180,7 @@ async def send_daily_digest(grouped: dict[str, dict[str, Any]], now: Optional[da
             continue
         count = len(sites)
         noun = "site" if count == 1 else "sites"
-        subject = f"Pour Intelligence daily · {count} {noun}"
+        subject = f"Monolith daily · {count} {noun}"
         html_body = render_digest_html(sites=sites, unsub_token=sub.get("unsub_token"))
         try:
             sent = await send_email(sub.get("email"), subject, html_body)

@@ -80,6 +80,7 @@ let watchRoster = [];
 let selectedWatchId = null;
 let watchListFilter = "watching";
 let watchTimer = null;
+let currentPane = "ticket";
 
 function watchEntryState(entry) {
   if (!entry?.watch?.open) return "closed";
@@ -197,6 +198,40 @@ function renderWatchList() {
   });
 }
 
+function setPane(pane) {
+  if (!pane) return;
+  currentPane = pane;
+  document.querySelectorAll(".pane").forEach((el) => {
+    el.hidden = el.dataset.pane !== pane;
+  });
+  document.querySelectorAll(".side-nav [data-pane]").forEach((button) => {
+    const active = button.dataset.pane === pane;
+    button.classList.toggle("active", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  });
+  if (pane === "ticket" && chart) {
+    requestAnimationFrame(() => chart.resize());
+  }
+  window.scrollTo(0, 0);
+}
+
+function renderEventsPane() {
+  const eventsEmpty = document.querySelector("#events-empty");
+  const eventsLog = document.querySelector("#watch-log");
+  if (!eventsEmpty || !eventsLog) return;
+  const entry = watchRoster.find((item) => item.id === selectedWatchId);
+  if (!entry) {
+    eventsEmpty.hidden = false;
+    eventsLog.hidden = true;
+    eventsLog.innerHTML = "";
+    return;
+  }
+  eventsEmpty.hidden = true;
+  eventsLog.hidden = false;
+  renderEventLog(entry.watch?.events || [], entry.location, entry.product);
+}
+
 function openWatch(id) {
   const entry = watchRoster.find((item) => item.id === id);
   if (!entry) return;
@@ -209,6 +244,7 @@ function openWatch(id) {
   showError("");
   lastByProduct[entry.product] = { payload: entry.payload, pourDateValue: entry.pourDateValue };
   watchByProduct[entry.product] = entry.watch;
+  setPane("ticket");
   paintResult(entry.payload, entry.pourDateValue);
   renderWatch(entry.product);
   renderWatchList();
@@ -292,6 +328,7 @@ function showEmptyState() {
   emptyState.hidden = false;
   resultBody.hidden = true;
   clearResultPanel();
+  renderEventsPane();
 }
 
 function applyProductChrome(product) {
@@ -636,11 +673,9 @@ function scheduleWatch() {
 
 function renderWatch(product) {
   const watch = watchByProduct[product];
-  const entry = watchRoster.find((item) => item.id === selectedWatchId && item.product === product);
-  const location = entry?.location || "";
   if (!watch.request) {
     watchEl.hidden = true;
-    renderEventLog(watch.events || [], location, product);
+    renderEventsPane();
     return;
   }
   watchEl.hidden = false;
@@ -671,7 +706,7 @@ function renderWatch(product) {
     watchStatusEl.textContent = `Last checked ${clockTime(watch.lastCheckedAt)}`;
   }
 
-  renderEventLog(watch.events || [], location, product);
+  renderEventsPane();
 }
 
 function startWatch(product, payload, requestBody, pourDateValue) {
@@ -878,6 +913,7 @@ async function checkPour(event) {
     }
     cacheResult(product, payload, pourDate);
     if (currentProduct === product) {
+      setPane("ticket");
       paintResult(payload, pourDate);
     }
     startWatch(product, payload, body, pourDate);
@@ -910,6 +946,12 @@ presetButtons.forEach((button) => {
 pourDateInput.value = defaultPourTime();
 document.querySelector(`#site-presets button[data-zip="${DEFAULT_ZIP}"]`).classList.add("active");
 form.addEventListener("submit", checkPour);
+
+document.querySelectorAll(".side-nav [data-pane]").forEach((button) => {
+  button.addEventListener("click", () => {
+    setPane(button.dataset.pane);
+  });
+});
 
 document.querySelectorAll(".product-switch button").forEach((button) => {
   button.addEventListener("click", () => {

@@ -1,0 +1,13 @@
+---
+description: Product notes — keep pricing off customer UI; accounts default free; company name is Monolith.
+alwaysApply: true
+---
+
+# Product notes
+
+Read `docs/product-notes.md` before changing product, pricing, accounts, or marketing UI.
+
+- Never put pricing on the landing page or any customer UI. Do not show org/team prices in the UI.
+- Stripe is not set up. All accounts default to free until it exists.
+- Company name is Monolith. Do not invent a domain (still TBD).
+- This sprint: dashboard side nav only. No landing, auth, Stripe, or pricing UI.

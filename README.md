@@ -1,6 +1,8 @@
-# Pour Intelligence
+# Monolith
 
-Go / no-go pour-readiness for concrete and masonry. The API turns a public weather forecast and ACI 305R / 306R guidance into a status, risk factors, cure-time estimate, and a mitigation note.
+Go / no-go tickets for concrete and masonry. The API turns a public weather forecast and ACI 305R / 306R guidance into a status, risk factors, cure-time estimate, and a mitigation note.
+
+Public name is Monolith; API paths (`/v1/pour-readiness`, `/v1/pour-watch`) are unchanged.
 
 This is an advisory tool, not a substitute for project specifications or the engineer of record.
 
@@ -98,7 +100,7 @@ Set these on Render (and locally in `.env`):
 | Var | Purpose |
 | --- | --- |
 | `RESEND_API_KEY` | Resend HTTP API key. If missing, mail is skipped and pour/watch still succeed. |
-| `ALERT_FROM_EMAIL` | From header. Use `Pour Intelligence <onboarding@resend.dev>` until a domain is verified. |
+| `ALERT_FROM_EMAIL` | From header. Use `Monolith <onboarding@resend.dev>` until a domain is verified. |
 | `PUBLIC_BASE_URL` | Origin for unsubscribe links, e.g. `https://pourintelligence.onrender.com` |
 | `JOBS_SECRET` | Shared secret for job POSTs |
 
@@ -118,7 +120,7 @@ curl -sS -X POST "$PUBLIC_BASE_URL/internal/jobs/daily-digest" \
 `watch-tick` re-evaluates up to 50 open watches (stale first) and sends critical alerts.
 `daily-digest` sends one snapshot per eligible subscriber (skipped if a digest went out in the last ~20 hours).
 
-Until a domain is verified in Resend, send from `Pour Intelligence <onboarding@resend.dev>` (Resend’s test sender).
+Until a domain is verified in Resend, send from `Monolith <onboarding@resend.dev>` (Resend’s test sender).
 Swap `ALERT_FROM_EMAIL` to your domain later. Do not commit `RESEND_API_KEY`.
 
 ## Deploy

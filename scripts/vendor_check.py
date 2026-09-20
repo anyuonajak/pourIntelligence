@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A tiny 'vendor app': call Pour Intelligence with an API key.
+"""A tiny 'vendor app': call Monolith with an API key.
 
     export POUR_API_URL=https://pourintelligence.onrender.com
     export POUR_API_KEY='pi_live_...'

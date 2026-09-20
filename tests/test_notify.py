@@ -137,7 +137,7 @@ def test_mail_noop_without_api_key(monkeypatch):
 def test_mail_posts_to_resend_when_configured(monkeypatch):
     get_settings.cache_clear()
     monkeypatch.setenv("RESEND_API_KEY", "re_test")
-    monkeypatch.setenv("ALERT_FROM_EMAIL", "Pour Intelligence <alerts@example.com>")
+    monkeypatch.setenv("ALERT_FROM_EMAIL", "Monolith <alerts@example.com>")
     get_settings.cache_clear()
     captured = {}
 

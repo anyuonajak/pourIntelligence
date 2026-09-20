@@ -52,10 +52,10 @@ FRONTEND = ROOT / "frontend"
 settings = get_settings()
 
 app = FastAPI(
-    title="Pour Intelligence",
+    title="Monolith",
     version="0.1.0",
     description=(
-        "Go / no-go pour-readiness for concrete and masonry, then a live watch "
+        "Go / no-go tickets for concrete and masonry, then a live watch "
         "that restamps only on material forecast changes. Advisory only. "
         "Public demo is rate-limited. Vendor callers should send X-API-Key."
     ),

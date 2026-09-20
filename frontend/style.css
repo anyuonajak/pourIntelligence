@@ -137,6 +137,60 @@ b {
   padding: 16px 24px 48px;
 }
 
+.dashboard {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.side-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: sticky;
+  top: 16px;
+}
+
+.side-nav button {
+  height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--t-14);
+  font-weight: var(--w-medium);
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.side-nav button:hover {
+  background: var(--fill);
+  color: var(--ink);
+}
+
+.side-nav button.active,
+.side-nav button.active:hover {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.side-nav button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.dashboard-main {
+  min-width: 0;
+}
+
+.pane[hidden] {
+  display: none !important;
+}
+
 .panel,
 .ticket,
 .result,
@@ -353,7 +407,8 @@ button:focus-visible {
 
 .product-switch button:focus-visible,
 .filter-tabs button:focus-visible,
-.admin-tabs button:focus-visible {
+.admin-tabs button:focus-visible,
+.side-nav button:focus-visible {
   box-shadow: 0 0 0 1px var(--accent);
 }
 
@@ -862,9 +917,18 @@ button#submit-btn:disabled,
   font-size: var(--t-14);
 }
 
-.watch-list {
-  margin-top: 20px;
+.watch-list,
+.events-pane {
+  margin-top: 0;
   padding: 20px 24px 16px;
+}
+
+.events-pane .empty {
+  padding: 12px 0 8px;
+}
+
+.events-pane .panel-head {
+  margin-bottom: 8px;
 }
 
 .watch-list-head {
@@ -1064,7 +1128,8 @@ button#submit-btn:disabled,
   .ticket,
   .result,
   .check-detail,
-  .watch-list {
+  .watch-list,
+  .events-pane {
     padding: 20px;
   }
 
@@ -1104,6 +1169,27 @@ button#submit-btn:disabled,
     grid-template-columns: 64px 72px minmax(0, 1fr);
     gap: 4px 10px;
     padding: 12px 0;
+  }
+}
+
+@media (max-width: 800px) {
+  .dashboard {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .side-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    position: static;
+    gap: 6px;
+  }
+
+  .side-nav button {
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: var(--t-12);
   }
 }
 
