@@ -281,9 +281,43 @@ function resetComposer(product) {
   }
 }
 
+function looksLikeDump(text) {
+  if (typeof text !== "string") return true;
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+  if (/https?:\/\//i.test(trimmed)) return true;
+  if (/open-meteo/i.test(trimmed)) return true;
+  if (/mozilla/i.test(trimmed)) return true;
+  if (/client error/i.test(trimmed)) return true;
+  if (/traceback/i.test(trimmed)) return true;
+  if (trimmed.length > 180) return true;
+  return false;
+}
+
+function publicErrorText(payload, fallback) {
+  const pieces = [];
+  if (payload && typeof payload === "object") {
+    if (typeof payload.message === "string") pieces.push(payload.message);
+    const detail = payload.detail;
+    if (typeof detail === "string") pieces.push(detail);
+    if (detail && typeof detail === "object" && !Array.isArray(detail) && typeof detail.message === "string") {
+      pieces.push(detail.message);
+    }
+    if (Array.isArray(detail)) {
+      pieces.push(detail.map((item) => item && item.msg).filter(Boolean).join(" "));
+    }
+  }
+  for (const piece of pieces) {
+    if (!looksLikeDump(piece)) return piece.trim();
+  }
+  return fallback;
+}
+
 function showError(message) {
-  formError.hidden = !message;
-  formError.textContent = message || "";
+  const text = typeof message === "string" && !looksLikeDump(message) ? message.trim() : "";
+  const show = Boolean(message);
+  formError.hidden = !show;
+  formError.textContent = show ? text || COPY[currentProduct].error : "";
 }
 
 function formatWhen(isoLocal, timezone) {
@@ -750,9 +784,14 @@ async function pollOneWatch(entry) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const payload = await response.json();
+    let payload;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new Error("Could not refresh this watch.");
+    }
     if (!response.ok) {
-      throw new Error(payload.detail || response.statusText);
+      throw new Error(publicErrorText(payload, "Could not refresh this watch."));
     }
     watch.error = null;
     watch.lastCheckedAt = payload.checked_at;
@@ -782,7 +821,8 @@ async function pollOneWatch(entry) {
       }
     }
   } catch (error) {
-    watch.error = error.message || "network error";
+    const raw = error && error.message;
+    watch.error = looksLikeDump(raw) ? "briefly unavailable" : raw;
   } finally {
     watch.polling = false;
   }
@@ -901,11 +941,14 @@ async function checkPour(event) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const payload = await response.json();
+    let payload;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new Error(copy.error);
+    }
     if (!response.ok) {
-      const detail = payload.detail;
-      const message = Array.isArray(detail) ? detail.map((item) => item.msg).join(" ") : detail || response.statusText;
-      throw new Error(message);
+      throw new Error(publicErrorText(payload, copy.error));
     }
     cacheResult(product, payload, pourDate);
     if (currentProduct === product) {
@@ -918,7 +961,7 @@ async function checkPour(event) {
     }
   } catch (error) {
     if (currentProduct === product) {
-      showError(error.message || copy.error);
+      showError(looksLikeDump(error.message) ? copy.error : error.message || copy.error);
     }
   } finally {
     if (inFlightProduct === product) {

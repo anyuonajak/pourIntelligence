@@ -65,7 +65,7 @@ def get_settings() -> Settings:
         watch_rate_limit_per_hour=int(_first("WATCH_RATE_LIMIT_PER_HOUR") or "240"),
         watch_poll_seconds=int(_first("WATCH_POLL_SECONDS") or "180"),
         weather_cache_minutes=int(_first("WEATHER_CACHE_MINUTES") or "45"),
-        watch_weather_cache_minutes=int(_first("WATCH_WEATHER_CACHE_MINUTES") or "10"),
+        watch_weather_cache_minutes=int(_first("WATCH_WEATHER_CACHE_MINUTES") or "15"),
         admin_username=_first("ADMIN_USERNAME") or "admin",
         admin_password=_first("ADMIN_PASSWORD"),
         session_secret=session_secret,

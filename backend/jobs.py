@@ -37,7 +37,7 @@ UNSUB_HTML = """<!DOCTYPE html>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Unsubscribed — Monolith</title>
-  <link rel="stylesheet" href="/style.css?v=25"/>
+  <link rel="stylesheet" href="/style.css?v=27"/>
 </head>
 <body>
   <header class="topbar">
@@ -63,7 +63,7 @@ UNSUB_MISSING_HTML = """<!DOCTYPE html>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Unsubscribe — Monolith</title>
-  <link rel="stylesheet" href="/style.css?v=25"/>
+  <link rel="stylesheet" href="/style.css?v=27"/>
 </head>
 <body>
   <header class="topbar">

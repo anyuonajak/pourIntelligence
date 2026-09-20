@@ -39,7 +39,7 @@ from .schemas import (
     ProductType,
 )
 from .watch import diff_forecast, is_watch_open, jobsite_now, watch_until
-from .weather import fetch_hourly, resolve_location
+from .weather import WeatherUnavailable, fetch_hourly, resolve_location
 
 logging.basicConfig(
     level=logging.INFO,
@@ -70,6 +70,14 @@ app.add_middleware(
 app.add_middleware(SessionMiddleware, secret_key=settings.session_secret, same_site="lax", https_only=False)
 app.include_router(admin_router)
 app.include_router(jobs_router)
+
+
+@app.exception_handler(WeatherUnavailable)
+async def weather_unavailable_handler(_request: Request, exc: WeatherUnavailable) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": exc.error, "message": exc.message},
+    )
 
 
 def _client_ip(request: Request) -> str:

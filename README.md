@@ -80,7 +80,7 @@ and shown in `/admin`.
 Browser polling only runs while the page is open. Critical alert mail and a daily digest run from
 server-side job endpoints so overnight watches still notify when the tab is closed.
 
-`WATCH_POLL_SECONDS` (default 180) sets the heartbeat, `WATCH_WEATHER_CACHE_MINUTES` (default 10) how fresh the forecast
+`WATCH_POLL_SECONDS` (default 180) sets the heartbeat, `WATCH_WEATHER_CACHE_MINUTES` (default 15) how fresh the forecast
 must be on a watch poll, and `WATCH_RATE_LIMIT_PER_HOUR` (default 240) the demo poll quota.
 
 ## Email and jobs

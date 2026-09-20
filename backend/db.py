@@ -54,25 +54,34 @@ def lookup_api_key(raw: str) -> Optional[dict[str, Any]]:
 
 
 def cache_key_for_weather(latitude: float, longitude: float, pour_day: str, mode: str) -> str:
-    return f"{round(latitude, 2)}:{round(longitude, 2)}:{pour_day}:{mode}"
+    lat = round(latitude, 2)
+    lon = round(longitude, 2)
+    # Forecast payloads are a rolling 16-day window; share one entry per site.
+    if mode == "forecast":
+        return f"{lat}:{lon}:forecast"
+    return f"{lat}:{lon}:{pour_day}:{mode}"
 
 
-def get_weather_cache(key: str, max_age_minutes: Optional[int] = None) -> Optional[dict[str, Any]]:
+def get_weather_cache(
+    key: str,
+    max_age_minutes: Optional[int] = None,
+    stale_within_minutes: Optional[int] = None,
+) -> Optional[dict[str, Any]]:
     client = get_client()
     if client is None:
         return None
     try:
         now = datetime.now(timezone.utc)
-        query = (
-            client.table("weather_cache")
-            .select("payload,fetched_at")
-            .eq("cache_key", key)
-            .gt("expires_at", now.isoformat())
-        )
-        if max_age_minutes is not None:
-            # A watch needs fresher data than a one-off check, even on a warm cache entry.
-            cutoff = now - timedelta(minutes=max_age_minutes)
+        query = client.table("weather_cache").select("payload,fetched_at").eq("cache_key", key)
+        if stale_within_minutes is not None:
+            cutoff = now - timedelta(minutes=stale_within_minutes)
             query = query.gt("fetched_at", cutoff.isoformat())
+        else:
+            query = query.gt("expires_at", now.isoformat())
+            if max_age_minutes is not None:
+                # A watch needs fresher data than a one-off check, even on a warm cache entry.
+                cutoff = now - timedelta(minutes=max_age_minutes)
+                query = query.gt("fetched_at", cutoff.isoformat())
         result = query.limit(1).execute()
         rows = result.data or []
         if not rows:
