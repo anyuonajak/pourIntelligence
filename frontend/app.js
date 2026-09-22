@@ -320,10 +320,13 @@ function showError(message) {
   formError.textContent = show ? text || COPY[currentProduct].error : "";
 }
 
-function showWatchLimit(hit) {
+function showWatchLimit(hit, trialEnded) {
   const note = document.querySelector("#watch-limit-note");
   if (!note) return;
   note.hidden = !hit;
+  if (hit) {
+    note.textContent = trialEnded ? "This trial has ended." : "You can watch 5 sites.";
+  }
 }
 
 function formatWhen(isoLocal, timezone) {
@@ -964,7 +967,7 @@ async function checkPour(event) {
       paintResult(payload, pourDate);
     }
     startWatch(product, payload, body, pourDate);
-    showWatchLimit(Boolean(payload.watch_limit_reached));
+    showWatchLimit(Boolean(payload.watch_limit_reached), Boolean(payload.trial_ended));
     if (currentProduct === product) {
       resetComposer(product);
     }

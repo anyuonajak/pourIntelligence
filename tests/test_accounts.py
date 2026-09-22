@@ -130,6 +130,61 @@ def test_sixth_watch_does_not_stay_watching(memory_accounts, stub_weather):
     assert payload["watch_limit_reached"] is True
     assert "$20" not in sixth.text
     assert "$100" not in sixth.text
+    assert payload.get("trial_ended") is False
+
+
+def test_org_watches_unlimited_during_two_week_trial(memory_accounts, stub_weather):
+    from backend.auth import hash_password, new_session_nonce
+    from backend.db import create_account
+
+    create_account(
+        "gc@unlimited.test",
+        hash_password("password12"),
+        session_nonce=new_session_nonce(),
+        display_name="Acme",
+        kind="org",
+    )
+    client = TestClient(app)
+    assert client.post(
+        "/v1/auth/login",
+        json={"email": "gc@unlimited.test", "password": "password12"},
+    ).status_code == 200
+    for _ in range(6):
+        response = client.post("/v1/pour-readiness", json=_watch_body())
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["watching"] is True
+        assert payload["watch_limit_reached"] is False
+        assert payload.get("trial_ended") is False
+    assert "$100" not in response.text
+
+
+def test_org_watch_stops_after_two_week_trial(memory_accounts, stub_weather):
+    from backend.auth import hash_password, new_session_nonce
+    from backend.db import _ACCOUNTS_BY_EMAIL, _ACCOUNTS_BY_ID, create_account
+
+    account = create_account(
+        "gc@expired.test",
+        hash_password("password12"),
+        session_nonce=new_session_nonce(),
+        display_name="Acme",
+        kind="org",
+    )
+    ended = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    _ACCOUNTS_BY_ID[account["id"]]["trial_ends_at"] = ended
+    client = TestClient(app)
+    assert client.post(
+        "/v1/auth/login",
+        json={"email": "gc@expired.test", "password": "password12"},
+    ).status_code == 200
+    response = client.post("/v1/pour-readiness", json=_watch_body())
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["watching"] is False
+    assert payload["watch_limit_reached"] is True
+    assert payload["trial_ended"] is True
+    assert "$100" not in response.text
+    assert _ACCOUNTS_BY_EMAIL["gc@expired.test"] == account["id"]
 
 
 def test_landing_has_no_prices():

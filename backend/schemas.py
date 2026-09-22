@@ -161,6 +161,7 @@ class PourReadinessResponse(BaseModel):
     watch_until: Optional[str] = None
     next_check_seconds: Optional[int] = None
     watch_limit_reached: bool = False
+    trial_ended: bool = False
     disclaimer: str = DISCLAIMER
 
 

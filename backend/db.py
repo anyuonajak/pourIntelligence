@@ -603,13 +603,30 @@ def revoke_api_key(key_id: str) -> bool:
 
 
 INDIVIDUAL_WATCH_LIMIT = 5
-ORG_WATCH_LIMIT = 3
+INDIVIDUAL_TRIAL_DAYS = 30
+ORG_TRIAL_DAYS = 14
+UNLIMITED_WATCHES = 1_000_000
 FREE_WATCH_LIMIT = INDIVIDUAL_WATCH_LIMIT
+
+
+def account_trial_open(account: Optional[dict[str, Any]]) -> bool:
+    if not account:
+        return False
+    raw = account.get("trial_ends_at")
+    if not raw:
+        return False
+    try:
+        ends = raw if isinstance(raw, datetime) else datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if ends.tzinfo is None:
+        ends = ends.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) < ends
 
 
 def watch_limit_for_account(account: Optional[dict[str, Any]]) -> int:
     if account and (account.get("kind") or "individual") == "org":
-        return ORG_WATCH_LIMIT
+        return UNLIMITED_WATCHES if account_trial_open(account) else 0
     return INDIVIDUAL_WATCH_LIMIT
 
 
@@ -705,7 +722,8 @@ def create_account(
     cleaned = email.strip().lower()
     account_kind = "org" if kind == "org" else "individual"
     now = datetime.now(timezone.utc)
-    trial_ends = now + timedelta(days=30)
+    trial_days = ORG_TRIAL_DAYS if account_kind == "org" else INDIVIDUAL_TRIAL_DAYS
+    trial_ends = now + timedelta(days=trial_days)
     row = {
         "id": str(uuid4()),
         "created_at": now.isoformat(),

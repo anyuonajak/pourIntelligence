@@ -6,12 +6,13 @@ Captured from the product owner. Company name is **Monolith**. Do not invent a d
 
 These figures are internal planning notes only. They must never appear on the landing page or any customer UI.
 
-- Free → watch 5 (individuals). Org free cap is 3 until we say otherwise.
+- Individuals: free, **5 watches**, **30-day** trial.
+- Orgs: unlimited watches for **14 days**, then new watches stop until they pay (Stripe later).
 - Individuals → $20
 - Teams/Org → $100
 - Stripe not set up yet. Moving to a free version: **all accounts default to free**.
 - Timestamp every org/individual onboarded.
-- Start with **one month free**.
+- Do **not** put pricing on the landing page.
 - Do **not** put pricing on the landing page.
 - Do **not** show org/team prices on the UI.
 

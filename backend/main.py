@@ -15,6 +15,7 @@ from .admin import router as admin_router
 from .auth import get_account_session
 from .config import get_settings
 from .db import (
+    account_trial_open,
     watch_limit_for_account,
     check_exists,
     count_watching_for_account,
@@ -205,11 +206,17 @@ async def pour_readiness(request: Request, body: PourReadinessRequest) -> PourRe
     predictions = result["predictions"].model_dump(mode="json")
     watching = is_watch_open(body.pour_date, predictions, _jobsite_now(tz_name))
     watch_limit_reached = False
+    trial_ended = False
     account = get_account_session(request)
     account_id = str(account["id"]) if account else None
-    if account_id and watching and count_watching_for_account(account_id) >= watch_limit_for_account(account):
-        watching = False
-        watch_limit_reached = True
+    if account_id and watching:
+        if (account.get("kind") or "individual") == "org" and not account_trial_open(account):
+            watching = False
+            watch_limit_reached = True
+            trial_ended = True
+        elif count_watching_for_account(account_id) >= watch_limit_for_account(account):
+            watching = False
+            watch_limit_reached = True
 
     api_key = getattr(request.state, "api_key", None)
     referer = request.headers.get("referer") or ""
@@ -298,6 +305,7 @@ async def pour_readiness(request: Request, body: PourReadinessRequest) -> PourRe
         watch_until=watch_until(body.pour_date, predictions).isoformat(),
         next_check_seconds=settings.watch_poll_seconds,
         watch_limit_reached=watch_limit_reached,
+        trial_ended=trial_ended,
     )
 
 

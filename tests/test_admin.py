@@ -1,4 +1,5 @@
 import re
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
@@ -52,6 +53,11 @@ def test_admin_onboard_org(monkeypatch):
     assert body["display_name"] == "Acme Builders"
     assert body["kind"] == "org"
     assert body["plan"] == "free"
+    trial = datetime.fromisoformat(str(body["trial_ends_at"]).replace("Z", "+00:00"))
+    if trial.tzinfo is None:
+        trial = trial.replace(tzinfo=timezone.utc)
+    delta = trial - datetime.now(timezone.utc)
+    assert timedelta(days=13) < delta < timedelta(days=15)
     assert body["password"] == "password12"
     assert "$20" not in created.text
     assert "$100" not in created.text
