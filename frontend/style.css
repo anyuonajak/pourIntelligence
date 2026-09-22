@@ -282,7 +282,8 @@ a.btn-primary,
 a.text-btn,
 button#submit-btn,
 #login-btn,
-#key-form button[type="submit"] {
+#key-form button[type="submit"],
+#org-form button[type="submit"] {
   height: var(--control);
   padding: 0 14px;
   border-radius: var(--radius-sm);
@@ -433,7 +434,8 @@ button:focus-visible {
 a.btn-primary,
 button#submit-btn,
 #login-btn,
-#key-form button[type="submit"] {
+#key-form button[type="submit"],
+#org-form button[type="submit"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -449,7 +451,8 @@ button#submit-btn,
 a.btn-primary:hover,
 button#submit-btn:hover,
 #login-btn:hover,
-#key-form button[type="submit"]:hover {
+#key-form button[type="submit"]:hover,
+#org-form button[type="submit"]:hover {
   background: #2f4ec4;
   border-color: #2f4ec4;
   color: #fff;
@@ -1115,6 +1118,16 @@ button#submit-btn:disabled,
   gap: 12px;
   align-items: end;
   padding: 20px;
+}
+
+#org-form {
+  max-width: 720px;
+  grid-template-columns: 1fr 1fr;
+}
+
+#org-form button[type="submit"] {
+  grid-column: 1 / -1;
+  justify-self: start;
 }
 
 .new-key {

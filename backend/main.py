@@ -15,7 +15,7 @@ from .admin import router as admin_router
 from .auth import get_account_session
 from .config import get_settings
 from .db import (
-    FREE_WATCH_LIMIT,
+    watch_limit_for_account,
     check_exists,
     count_watching_for_account,
     get_check_for_watch,
@@ -207,7 +207,7 @@ async def pour_readiness(request: Request, body: PourReadinessRequest) -> PourRe
     watch_limit_reached = False
     account = get_account_session(request)
     account_id = str(account["id"]) if account else None
-    if account_id and watching and count_watching_for_account(account_id) >= FREE_WATCH_LIMIT:
+    if account_id and watching and count_watching_for_account(account_id) >= watch_limit_for_account(account):
         watching = False
         watch_limit_reached = True
 

@@ -18,6 +18,7 @@ from .db import (
     list_open_watches,
     list_watching_subscribed,
     record_watch_poll,
+    set_watching,
     unsubscribe_by_token,
 )
 from .formulas import evaluate_pour
@@ -98,6 +99,20 @@ def require_jobs_secret(
         raise HTTPException(status_code=401, detail="Unauthorized.")
 
 
+WATCH_EXPIRED_EVENT = {
+    "code": "WATCH_EXPIRED",
+    "label": "Watch ended",
+    "detail": "Closed 48 hours after the scheduled time.",
+    "previous": "watching",
+    "current": "closed",
+}
+
+
+def _check_timezone(stored: dict[str, Any]) -> str | None:
+    location = stored.get("location") if isinstance(stored.get("location"), dict) else {}
+    return location.get("timezone") or stored.get("timezone")
+
+
 def _parse_pour_date(value: Any) -> datetime:
     if isinstance(value, datetime):
         pour = value
@@ -164,12 +179,27 @@ async def evaluate_stored(stored: dict[str, Any]) -> tuple[dict[str, Any], str |
 
 
 async def poll_stored_check(stored: dict[str, Any]) -> dict[str, Any]:
+    try:
+        pour_date = _parse_pour_date(stored.get("pour_date"))
+    except Exception:
+        pour_date = None
+    tz_name = _check_timezone(stored)
+    if pour_date and not is_watch_open(pour_date, None, jobsite_now(tz_name)):
+        check_id = stored.get("id")
+        if check_id:
+            set_watching(UUID(str(check_id)), False, WATCH_EXPIRED_EVENT)
+        return {
+            "changed": True,
+            "emailed": False,
+            "watching": False,
+            "watch_until": watch_until(pour_date, None).isoformat(),
+            "pending_alerts": 0,
+        }
     result, tz_name = await evaluate_stored(stored)
     status = result["go_no_go_status"].value
     risk_factors = result["risk_factors"]
     metrics = result["metrics"].model_dump(mode="json")
     predictions = result["predictions"].model_dump(mode="json")
-    pour_date = _parse_pour_date(stored.get("pour_date"))
     watching = is_watch_open(pour_date, predictions, jobsite_now(tz_name))
     if stored.get("watching") is False:
         watching = False

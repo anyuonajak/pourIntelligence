@@ -10,7 +10,7 @@
       href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/style.css?v=28" />
+    <link rel="stylesheet" href="/style.css?v=29" />
   </head>
   <body>
     <header class="topbar">
@@ -22,6 +22,7 @@
         <div class="topbar-actions">
           <nav class="admin-tabs" role="tablist">
             <button type="button" class="active" data-tab="checks">Checks</button>
+            <button type="button" data-tab="orgs">Orgs</button>
             <button type="button" data-tab="keys">API keys</button>
           </nav>
           <button type="button" id="logout-btn" class="text-btn">Sign out</button>
@@ -70,6 +71,42 @@
         </div>
       </section>
 
+      <section id="tab-orgs" hidden>
+        <form id="org-form" class="panel key-form">
+          <label>
+            Company
+            <input id="org-name" name="company_name" placeholder="Company name" required maxlength="80" />
+          </label>
+          <label>
+            Email
+            <input id="org-email" name="email" type="email" autocomplete="off" required maxlength="254" />
+          </label>
+          <label>
+            Password
+            <input id="org-password" name="password" type="password" minlength="8" autocomplete="new-password" required />
+          </label>
+          <button type="submit">Onboard org</button>
+        </form>
+        <p id="new-org" class="new-key" hidden></p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Company</th>
+                <th>Email</th>
+                <th>Onboarded</th>
+                <th>Trial ends</th>
+              </tr>
+            </thead>
+            <tbody id="orgs-body">
+              <tr>
+                <td colspan="4">Loading…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section id="tab-keys" hidden>
         <form id="key-form" class="panel key-form">
           <label>
@@ -103,6 +140,6 @@
         </div>
       </section>
     </div>
-    <script src="/admin.js?v=13"></script>
+    <script src="/admin.js?v=14"></script>
   </body>
 </html>

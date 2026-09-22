@@ -1,9 +1,10 @@
+import asyncio
 from datetime import datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import main
+from backend import jobs, main
 from backend.formulas import WeatherHour
 from backend.main import app
 from backend.watch import diff_forecast, is_watch_open, watch_tail_hours
@@ -62,18 +63,39 @@ def test_small_temp_wiggle_is_ignored():
     assert changes == []
 
 
-def test_watch_tail_uses_protection_period_within_bounds():
-    assert watch_tail_hours(None) == 24
-    assert watch_tail_hours({"protection_period_hours": 12}) == 24
-    assert watch_tail_hours({"estimated_time_to_500_psi_hours": 30}) == 30
-    assert watch_tail_hours({"estimated_time_to_500_psi_hours": 200}) == 48
-
-
-def test_watch_closes_after_the_protection_period():
+def test_watch_closes_48_hours_after_scheduled_time():
+    assert watch_tail_hours(None) == 48
+    assert watch_tail_hours({"protection_period_hours": 12}) == 48
     pour = datetime(2026, 5, 12, 8, 0, 0)
     assert is_watch_open(pour, None, pour - timedelta(hours=6))
-    assert is_watch_open(pour, None, pour + timedelta(hours=23))
-    assert not is_watch_open(pour, None, pour + timedelta(hours=25))
+    assert is_watch_open(pour, None, pour + timedelta(hours=47))
+    assert not is_watch_open(pour, None, pour + timedelta(hours=48))
+
+
+def test_watch_tick_closes_expired_without_weather(monkeypatch):
+    closed = {}
+
+    def fake_set(check_id, watching, event):
+        closed["id"] = str(check_id)
+        closed["watching"] = watching
+        closed["code"] = (event or {}).get("code")
+        return True
+
+    async def boom(*_args, **_kwargs):
+        raise AssertionError("expired watches should not fetch weather")
+
+    monkeypatch.setattr(jobs, "set_watching", fake_set)
+    monkeypatch.setattr(jobs, "evaluate_stored", boom)
+    stored = {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "pour_date": (datetime.now() - timedelta(hours=49)).isoformat(timespec="seconds"),
+        "location": {"timezone": "UTC"},
+        "watching": True,
+    }
+    outcome = asyncio.run(jobs.poll_stored_check(stored))
+    assert outcome["watching"] is False
+    assert closed["watching"] is False
+    assert closed["code"] == "WATCH_EXPIRED"
 
 
 @pytest.fixture

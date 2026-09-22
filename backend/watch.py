@@ -13,8 +13,9 @@ EVAP_SWING = 0.05
 RAIN_SWING_IN = 0.03
 MIN_TEMP_SWING_F = 5.0
 
-# A watch runs until the placement has had its protection period, then closes.
-WATCH_TAIL_HOURS_MIN = 24
+# A watch closes 48 hours after the scheduled pour / lay-up time.
+WATCH_CLOSE_HOURS_AFTER_POUR = 48
+WATCH_TAIL_HOURS_MIN = 48
 WATCH_TAIL_HOURS_MAX = 48
 
 # Instant email: call changes and no-go risks only — not metric heartbeats.
@@ -48,25 +49,12 @@ def _fmt(value: Optional[float], digits: int = 1) -> str:
 
 
 def watch_tail_hours(predictions: dict[str, Any] | None) -> int:
-    """How long after placement we keep watching, from the protection period."""
-    predictions = predictions or {}
-    candidates = [
-        predictions.get("protection_period_hours"),
-        predictions.get("estimated_time_to_500_psi_hours"),
-    ]
-    hours = WATCH_TAIL_HOURS_MIN
-    for value in candidates:
-        if value is None:
-            continue
-        try:
-            hours = max(hours, int(round(float(value))))
-        except (TypeError, ValueError):
-            continue
-    return min(hours, WATCH_TAIL_HOURS_MAX)
+    """How long after the scheduled time we keep watching."""
+    return WATCH_CLOSE_HOURS_AFTER_POUR
 
 
 def watch_until(pour_date: datetime, predictions: dict[str, Any] | None) -> datetime:
-    return pour_date + timedelta(hours=watch_tail_hours(predictions))
+    return pour_date + timedelta(hours=WATCH_CLOSE_HOURS_AFTER_POUR)
 
 
 def is_watch_open(pour_date: datetime, predictions: dict[str, Any] | None, now: datetime) -> bool:

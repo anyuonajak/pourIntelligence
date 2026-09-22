@@ -49,6 +49,7 @@ def _me_payload(account: dict) -> dict[str, object]:
         "plan": account.get("plan") or "free",
         "trial_ends_at": account.get("trial_ends_at"),
         "kind": account.get("kind") or "individual",
+        "display_name": account.get("display_name"),
     }
 
 
@@ -84,18 +85,23 @@ def login(request: Request, body: AuthCredentials) -> dict[str, object]:
     account = get_account_by_email(body.email)
     if account is None or not verify_password(body.password, str(account.get("password_hash") or "")):
         raise HTTPException(status_code=401, detail="Bad email or password.")
-    nonce = new_session_nonce()
-    if not set_account_nonce(str(account["id"]), nonce):
-        raise HTTPException(status_code=503, detail="Could not start a session.")
+    if (account.get("kind") or "individual") == "org":
+        nonce = str(account.get("session_nonce") or "") or new_session_nonce()
+        if not account.get("session_nonce") and not set_account_nonce(str(account["id"]), nonce):
+            raise HTTPException(status_code=503, detail="Could not start a session.")
+    else:
+        nonce = new_session_nonce()
+        if not set_account_nonce(str(account["id"]), nonce):
+            raise HTTPException(status_code=503, detail="Could not start a session.")
+        account["session_nonce"] = nonce
     set_account_session(request, str(account["id"]), nonce)
-    account["session_nonce"] = nonce
     return _me_payload(account)
 
 
 @router.post("/v1/auth/logout")
 def logout(request: Request) -> dict[str, bool]:
     account = get_account_session(request)
-    if account:
+    if account and (account.get("kind") or "individual") != "org":
         set_account_nonce(str(account["id"]), new_session_nonce())
     clear_account_session(request)
     return {"ok": True}

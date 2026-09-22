@@ -5,11 +5,22 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from .auth import require_admin, verify_admin
+from .auth import hash_password, new_session_nonce, require_admin, verify_admin
 from .config import get_settings
-from .db import create_api_key, list_api_keys, list_checks, revoke_api_key, set_watching, summarize_checks
+from .db import (
+    create_account,
+    create_api_key,
+    get_account_by_email,
+    list_api_keys,
+    list_checks,
+    list_org_accounts,
+    revoke_api_key,
+    set_watching,
+    summarize_checks,
+)
+from .schemas import _EMAIL_RE
 
 FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
 router = APIRouter()
@@ -23,6 +34,28 @@ class LoginBody(BaseModel):
 class CreateKeyBody(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     rate_limit_per_hour: int = Field(default=300, ge=1, le=10000)
+
+
+class OnboardOrgBody(BaseModel):
+    company_name: str = Field(min_length=1, max_length=80)
+    email: str = Field(max_length=254)
+    password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("company_name", mode="before")
+    @classmethod
+    def normalize_company(cls, value: object) -> str:
+        text = str(value or "").strip()
+        if not text:
+            raise ValueError("Provide a company name.")
+        return text
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: object) -> str:
+        text = str(value or "").strip().lower()
+        if not text or len(text) > 254 or not _EMAIL_RE.fullmatch(text):
+            raise ValueError("Provide a valid email.")
+        return text
 
 
 @router.get("/admin/login")
@@ -95,6 +128,40 @@ def admin_close_watch(request: Request, check_id: UUID) -> dict[str, object]:
     ):
         raise HTTPException(status_code=404, detail="Unknown check.")
     return {"ok": True, "watching": False}
+
+
+@router.get("/admin/api/orgs")
+def admin_list_orgs(request: Request) -> dict[str, object]:
+    require_admin(request)
+    return {"orgs": list_org_accounts()}
+
+
+@router.post("/admin/api/orgs")
+def admin_onboard_org(request: Request, body: OnboardOrgBody) -> dict[str, object]:
+    require_admin(request)
+    if get_account_by_email(body.email):
+        raise HTTPException(status_code=409, detail="An account with that email already exists.")
+    nonce = new_session_nonce()
+    account = create_account(
+        body.email,
+        hash_password(body.password),
+        session_nonce=nonce,
+        display_name=body.company_name,
+        kind="org",
+    )
+    if account is None:
+        raise HTTPException(status_code=503, detail="Could not create this org.")
+    return {
+        "id": account.get("id"),
+        "email": account.get("email"),
+        "display_name": account.get("display_name"),
+        "kind": "org",
+        "plan": account.get("plan") or "free",
+        "created_at": account.get("created_at"),
+        "trial_ends_at": account.get("trial_ends_at"),
+        "password": body.password,
+        "warning": "Copy this password now. It will not be shown again.",
+    }
 
 
 @router.get("/admin/api/keys")

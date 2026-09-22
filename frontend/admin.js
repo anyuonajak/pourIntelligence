@@ -1,8 +1,11 @@
 const summaryEl = document.querySelector("#summary");
 const checksBody = document.querySelector("#checks-body");
 const keysBody = document.querySelector("#keys-body");
+const orgsBody = document.querySelector("#orgs-body");
 const newKeyEl = document.querySelector("#new-key");
+const newOrgEl = document.querySelector("#new-org");
 const keyForm = document.querySelector("#key-form");
+const orgForm = document.querySelector("#org-form");
 const detailEl = document.querySelector("#check-detail");
 const workspaceNote = document.querySelector("#workspace-note");
 
@@ -341,6 +344,23 @@ async function loadChecks() {
   renderCheckRows();
 }
 
+async function loadOrgs() {
+  const payload = await api("/admin/api/orgs");
+  orgsBody.innerHTML = "";
+  if (!payload.orgs.length) {
+    orgsBody.innerHTML = "<tr><td colspan=\"4\">No orgs yet.</td></tr>";
+    return;
+  }
+  payload.orgs.forEach((row) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${escapeText(row.display_name || "—")}</td>
+      <td>${escapeText(row.email || "—")}</td>
+      <td class="mono">${escapeText(fmt(row.created_at))}</td>
+      <td class="mono">${escapeText(fmt(row.trial_ends_at))}</td>`;
+    orgsBody.append(tr);
+  });
+}
+
 async function loadKeys() {
   const payload = await api("/admin/api/keys");
   keysBody.innerHTML = "";
@@ -366,6 +386,7 @@ document.querySelectorAll(".admin-tabs button").forEach((button) => {
     document.querySelectorAll(".admin-tabs button").forEach((item) => item.classList.remove("active"));
     button.classList.add("active");
     document.querySelector("#tab-checks").hidden = button.dataset.tab !== "checks";
+    document.querySelector("#tab-orgs").hidden = button.dataset.tab !== "orgs";
     document.querySelector("#tab-keys").hidden = button.dataset.tab !== "keys";
   });
 });
@@ -381,6 +402,24 @@ keysBody.addEventListener("click", async (event) => {
   if (!window.confirm("Revoke this key? Existing vendor calls will start failing.")) return;
   await api(`/admin/api/keys/${button.dataset.revoke}/revoke`, { method: "POST" });
   await loadKeys();
+});
+
+orgForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const payload = await api("/admin/api/orgs", {
+    method: "POST",
+    body: JSON.stringify({
+      company_name: document.querySelector("#org-name").value,
+      email: document.querySelector("#org-email").value,
+      password: document.querySelector("#org-password").value,
+    }),
+  });
+  newOrgEl.hidden = false;
+  newOrgEl.innerHTML = `<strong>Copy now:</strong> ${escapeText(payload.email)} · <code>${escapeText(
+    payload.password
+  )}</code><br>${escapeText(payload.warning)} They sign in at /login. Same login works on more than one device.`;
+  orgForm.reset();
+  await loadOrgs();
 });
 
 keyForm.addEventListener("submit", async (event) => {
@@ -428,4 +467,5 @@ document.querySelectorAll("#watch-filter button").forEach((button) => {
 loadChecks().catch((error) => {
   checksBody.innerHTML = `<tr><td colspan="6">${escapeText(error.message)}</td></tr>`;
 });
+loadOrgs().catch(() => {});
 loadKeys().catch(() => {});

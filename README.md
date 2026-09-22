@@ -74,7 +74,7 @@ only changes big enough to matter: a status flip, a risk factor appearing or cle
 line, or a swing of 5°F air, 5 mph wind, 12% RH, 0.05 lb/ft²/hr evaporation, or 0.03 in rain. Everything else is a
 heartbeat (`last checked …, no material change`).
 
-The watch closes at pour time plus the protection period (24–48h). Changes are appended to `watch_events` on the check
+The watch closes 48 hours after the scheduled pour or lay-up time. Changes are appended to `watch_events` on the check
 and shown in `/admin`.
 
 Browser polling only runs while the page is open. Critical alert mail and a daily digest run from

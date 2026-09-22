@@ -6,7 +6,7 @@ Captured from the product owner. Company name is **Monolith**. Do not invent a d
 
 These figures are internal planning notes only. They must never appear on the landing page or any customer UI.
 
-- Free → watch 3
+- Free → watch 5 (individuals). Org free cap is 3 until we say otherwise.
 - Individuals → $20
 - Teams/Org → $100
 - Stripe not set up yet. Moving to a free version: **all accounts default to free**.
@@ -25,10 +25,10 @@ Stripe: not set up yet. Plan details TBD.
 
 ## Accounts
 
-- Admin onboards Teams/Org.
+- Admin onboards Teams/Org (one GC login per company: name, email, password).
+- That org login can be open on more than one device at once. Named people / company Gmail / SSO later.
 - Individuals sign up and sign in themselves.
 - Only **one** individual account session with those credentials (one at a time).
-- **Infinite** team accounts can be signed in (company Gmail, SSO, etc.).
 
 ## Implementation order (easy → hard)
 
@@ -38,7 +38,7 @@ Stripe: not set up yet. Plan details TBD.
 4. Landing page (no pricing) — **this PR**
 5. Individual sign up / sign in, default free, onboard timestamp, 1 month trial, 3 watches — **this PR**
 6. One session per individual — **this PR**
-7. Admin onboards Teams/Org — later
-8. Team multi-login / SSO — later
+  7. Admin onboards Teams/Org — **this PR** (one GC login, multi-device)
+  8. Team multi-login / SSO — later
 9. Stripe — later
 10. Custom domain — later (user buying)

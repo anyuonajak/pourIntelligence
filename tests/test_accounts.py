@@ -69,6 +69,29 @@ def test_signup_login_me(memory_accounts):
     assert client.get("/v1/auth/me").status_code == 200
 
 
+def test_org_login_allows_two_sessions(memory_accounts):
+    from backend.auth import hash_password, new_session_nonce
+    from backend.db import create_account
+
+    create_account(
+        "gc@acme.test",
+        hash_password("password12"),
+        session_nonce=new_session_nonce(),
+        display_name="Acme Builders",
+        kind="org",
+    )
+    first = TestClient(app)
+    second = TestClient(app)
+    assert first.post("/v1/auth/login", json={"email": "gc@acme.test", "password": "password12"}).status_code == 200
+    assert second.post("/v1/auth/login", json={"email": "gc@acme.test", "password": "password12"}).status_code == 200
+    assert first.get("/v1/auth/me").status_code == 200
+    assert second.get("/v1/auth/me").status_code == 200
+    assert first.get("/v1/auth/me").json()["kind"] == "org"
+    first.post("/v1/auth/logout")
+    assert first.get("/v1/auth/me").status_code == 401
+    assert second.get("/v1/auth/me").status_code == 200
+
+
 def test_second_login_invalidates_first(memory_accounts):
     first = TestClient(app)
     created = first.post(
@@ -87,26 +110,26 @@ def test_second_login_invalidates_first(memory_accounts):
     assert first.get("/v1/auth/me").status_code == 401
 
 
-def test_fourth_watch_does_not_stay_watching(memory_accounts, stub_weather):
+def test_sixth_watch_does_not_stay_watching(memory_accounts, stub_weather):
     client = TestClient(app)
     signup = client.post(
         "/v1/auth/signup",
         json={"email": "watches@example.com", "password": "password12"},
     )
     assert signup.status_code == 200
-    for _ in range(3):
+    for _ in range(5):
         response = client.post("/v1/pour-readiness", json=_watch_body())
         assert response.status_code == 200
         payload = response.json()
         assert payload["watching"] is True
         assert payload["watch_limit_reached"] is False
-    fourth = client.post("/v1/pour-readiness", json=_watch_body())
-    assert fourth.status_code == 200
-    payload = fourth.json()
+    sixth = client.post("/v1/pour-readiness", json=_watch_body())
+    assert sixth.status_code == 200
+    payload = sixth.json()
     assert payload["watching"] is False
     assert payload["watch_limit_reached"] is True
-    assert "$20" not in fourth.text
-    assert "$100" not in fourth.text
+    assert "$20" not in sixth.text
+    assert "$100" not in sixth.text
 
 
 def test_landing_has_no_prices():
@@ -120,6 +143,7 @@ def test_landing_has_no_prices():
     assert "$20" not in text
     assert "$100" not in text
     assert "watch 3" not in text.lower()
+    assert "watch 5" not in text.lower()
     assert "aci" not in text.lower()
     assert "how it works" not in text.lower()
     app_page = client.get("/app")
@@ -129,6 +153,6 @@ def test_landing_has_no_prices():
     js = client.get("/app.js").text
     assert "credentials: \"include\"" in js or "credentials: 'include'" in js
     assert "/v1/auth/me" in js
-    assert "Free accounts can watch 3 sites." in app_page.text
+    assert "You can watch 5 sites." in app_page.text
     assert "$20" not in js
     assert "$100" not in js

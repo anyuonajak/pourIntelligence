@@ -19,6 +19,57 @@ def test_admin_api_requires_session():
     client = TestClient(app)
     response = client.get("/admin/api/checks")
     assert response.status_code == 401
+    assert client.get("/admin/api/orgs").status_code == 401
+    assert client.post(
+        "/admin/api/orgs",
+        json={"company_name": "Acme", "email": "gc@example.com", "password": "password12"},
+    ).status_code == 401
+
+
+def _admin_client(monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("ADMIN_PASSWORD", "admin-pass")
+    get_settings.cache_clear()
+    client = TestClient(app)
+    logged_in = client.post("/admin/api/login", json={"username": "admin", "password": "admin-pass"})
+    assert logged_in.status_code == 200
+    return client
+
+
+def test_admin_onboard_org(monkeypatch):
+    from backend import db
+
+    db.clear_account_memory()
+    monkeypatch.setattr(db, "get_client", lambda: None)
+    client = _admin_client(monkeypatch)
+    created = client.post(
+        "/admin/api/orgs",
+        json={"company_name": "Acme Builders", "email": "Gc@Acme.test", "password": "password12"},
+    )
+    assert created.status_code == 200
+    body = created.json()
+    assert body["email"] == "gc@acme.test"
+    assert body["display_name"] == "Acme Builders"
+    assert body["kind"] == "org"
+    assert body["plan"] == "free"
+    assert body["password"] == "password12"
+    assert "$20" not in created.text
+    assert "$100" not in created.text
+    listed = client.get("/admin/api/orgs")
+    assert listed.status_code == 200
+    orgs = listed.json()["orgs"]
+    assert len(orgs) == 1
+    assert orgs[0]["email"] == "gc@acme.test"
+    assert "password_hash" not in orgs[0]
+    assert "password" not in orgs[0]
+    assert "$20" not in listed.text
+    again = client.post(
+        "/admin/api/orgs",
+        json={"company_name": "Acme Builders", "email": "gc@acme.test", "password": "password12"},
+    )
+    assert again.status_code == 409
+    get_settings.cache_clear()
+    db.clear_account_memory()
 
 
 def test_verify_admin(monkeypatch):
@@ -105,6 +156,21 @@ def test_serialize_check_includes_subscriber_email():
     assert out["subscriber_id"] == "sub-1"
     assert "unsub_token" not in out
     assert "subscriber" not in out
+
+
+def test_admin_onboard_org_ui_has_no_prices():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "frontend"
+    html = (root / "admin.html").read_text()
+    js = (root / "admin.js").read_text()
+    assert "Onboard org" in html
+    assert 'data-tab="orgs"' in html
+    assert "/admin/api/orgs" in js
+    assert "$20" not in html
+    assert "$100" not in html
+    assert "$20" not in js
+    assert "$100" not in js
 
 
 def test_admin_js_does_not_close_watches():

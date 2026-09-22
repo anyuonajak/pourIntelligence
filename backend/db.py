@@ -602,7 +602,17 @@ def revoke_api_key(key_id: str) -> bool:
     return bool(result.data)
 
 
-FREE_WATCH_LIMIT = 3
+INDIVIDUAL_WATCH_LIMIT = 5
+ORG_WATCH_LIMIT = 3
+FREE_WATCH_LIMIT = INDIVIDUAL_WATCH_LIMIT
+
+
+def watch_limit_for_account(account: Optional[dict[str, Any]]) -> int:
+    if account and (account.get("kind") or "individual") == "org":
+        return ORG_WATCH_LIMIT
+    return INDIVIDUAL_WATCH_LIMIT
+
+
 _ACCOUNT_COLUMNS = (
     "id,created_at,email,password_hash,kind,plan,trial_ends_at,session_nonce,display_name"
 )
@@ -690,8 +700,10 @@ def create_account(
     *,
     session_nonce: str,
     display_name: Optional[str] = None,
+    kind: str = "individual",
 ) -> Optional[dict[str, Any]]:
     cleaned = email.strip().lower()
+    account_kind = "org" if kind == "org" else "individual"
     now = datetime.now(timezone.utc)
     trial_ends = now + timedelta(days=30)
     row = {
@@ -699,7 +711,7 @@ def create_account(
         "created_at": now.isoformat(),
         "email": cleaned,
         "password_hash": password_hash,
-        "kind": "individual",
+        "kind": account_kind,
         "plan": "free",
         "trial_ends_at": trial_ends.isoformat(),
         "session_nonce": session_nonce,
@@ -719,6 +731,34 @@ def create_account(
     except Exception:
         logger.warning("account insert failed")
         return None
+
+
+def _org_list_row(row: dict[str, Any]) -> dict[str, Any]:
+    public = _public_account(row)
+    public.pop("password_hash", None)
+    public.pop("session_nonce", None)
+    return public
+
+
+def list_org_accounts() -> list[dict[str, Any]]:
+    client = get_client()
+    if client is None:
+        rows = [_org_list_row(row) for row in _ACCOUNTS_BY_ID.values() if row.get("kind") == "org"]
+        return sorted(rows, key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    try:
+        result = (
+            client.table("accounts")
+            .select(_ACCOUNT_COLUMNS)
+            .eq("kind", "org")
+            .order("created_at", desc=True)
+            .limit(200)
+            .execute()
+        )
+        return [_org_list_row(row) for row in (result.data or [])]
+    except Exception:
+        logger.warning("org account list failed")
+        rows = [_org_list_row(row) for row in _ACCOUNTS_BY_ID.values() if row.get("kind") == "org"]
+        return sorted(rows, key=lambda item: str(item.get("created_at") or ""), reverse=True)
 
 
 def set_account_nonce(account_id: str, session_nonce: str) -> bool:

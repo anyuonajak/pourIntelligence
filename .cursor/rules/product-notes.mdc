@@ -17,7 +17,7 @@ Read `docs/product-notes.md` before changing product, pricing, accounts, or mark
   4. Landing page (no pricing) — this PR
   5. Individual sign up / sign in, default free, onboard timestamp, 1 month trial, 3 watches — this PR
   6. One session per individual — this PR
-  7. Admin onboards Teams/Org — later
+  7. Admin onboards Teams/Org — this PR (one GC login, multi-device)
   8. Team multi-login / SSO — later
   9. Stripe — later
   10. Custom domain — later (user buying)
