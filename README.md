@@ -21,7 +21,7 @@ This is an advisory tool, not a substitute for project specifications or the eng
 - `POST /v1/pour-outcomes` — success / cracked / delayed / other, tied to a check
 - Supabase Postgres (checks, outcomes, weather cache, API keys)
 - Demo rate limit (30/hour/IP) and optional `X-API-Key` for vendors
-- Terms at `/terms`
+- Terms at `/terms` (linked from `/admin` only)
 - Admin at `/admin` (checks vs outcomes, API key mint/revoke)
 - Two products: concrete slabs (ACI 305R/306R) and masonry (TMS 602 / ACI 530.1)
 

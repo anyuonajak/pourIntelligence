@@ -179,6 +179,29 @@ def test_admin_onboard_org_ui_has_no_prices():
     assert "$100" not in js
 
 
+def test_terms_link_is_admin_only():
+    from pathlib import Path
+
+    client = TestClient(app)
+    app_page = client.get("/app").text
+    landing = client.get("/").text
+    login = client.get("/login").text
+    signup = client.get("/signup").text
+    admin = (Path(__file__).resolve().parents[1] / "frontend" / "admin.html").read_text()
+    terms = client.get("/terms").text.lower()
+    assert 'href="/terms"' not in app_page
+    assert 'href="/terms"' not in landing
+    assert 'href="/terms"' not in login
+    assert 'href="/terms"' not in signup
+    assert 'href="/terms"' in admin
+    assert "aci" not in terms
+    assert "pour" not in terms
+    assert "masonry" not in terms
+    assert "forecast" not in terms
+    assert "go_no_go" not in terms
+    assert "no-go" not in terms
+
+
 def test_admin_js_does_not_close_watches():
     client = TestClient(app)
     js = client.get("/admin.js").text
